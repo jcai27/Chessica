@@ -117,6 +117,7 @@ sequenceDiagram
 - Implement MCTS with transposition tables and batched GPU inference hooks.
 - Integrate opponent model inference and per-game belief states.
 - Provide safe fallbacks when exploit scoring conflicts with objective evaluation limits.
+- Current prototype ships with a python-chess-powered alpha-beta search (depth configurable per session) that adds mobility, king safety, and quiescence heuristics in lieu of the eventual neural policy/value.
 
 ### 7.2 Web & API Layer
 - REST/WebSocket API for move requests and explanation retrieval.
@@ -167,6 +168,9 @@ sequenceDiagram
 | `time_control` | object | `{initial_ms, increment_ms}` |
 | `color` | string | `"white"`, `"black"`, or `"auto"`. |
 | `exploit_mode` | string | `"auto"`, `"on"`, `"off"`. |
+| `difficulty` | string | Optional preset (`beginner`, …, `grandmaster`). |
+| `engine_rating` | integer | Optional Elo target (600–2800); maps to the nearest preset. |
+| `engine_depth` | integer | Optional manual search depth override (1–5). Defaults to server setting. |
 
 **Response 201.**
 ```json
@@ -175,6 +179,9 @@ sequenceDiagram
   "engine_color": "black",
   "player_color": "white",
   "exploit_mode": "auto",
+  "difficulty": "advanced",
+  "engine_rating": 1600,
+  "engine_depth": 3,
   "status": "active",
   "created_at": "2024-03-18T12:00:00Z"
 }
@@ -208,9 +215,24 @@ sequenceDiagram
     "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 1 2",
     "move_number": 2,
     "turn": "white"
-  }
+  },
+  "result": null,
+  "winner": null,
+  "message": null
 }
 ```
+If a move ends the game (checkmate, stalemate, or resignation), the response returns `engine_move: null` (when the engine has no reply), alongside `result`, `winner`, and a friendly `message` so clients can conclude gracefully.
+
+### Difficulty Scale
+| Level | Approx. Rating | Search Depth |
+| --- | --- | --- |
+| Beginner | ~800 | 1 ply + quiescence |
+| Intermediate | ~1200 | 2 ply |
+| Advanced | ~1600 | 3 ply (default) |
+| Expert | ~2000 | 4 ply |
+| Grandmaster | ~2400 | 5 ply |
+
+Use `difficulty` on session creation (or the frontend dropdown) to select a preset. For finer control, pass `engine_rating` or `engine_depth`; the server will map those to the closest preset or mark them as `custom`.
 
 #### `GET /api/v1/sessions/{sessionId}`
 - Returns current board, clocks, opponent profile snapshot, and moves list for resuming games.
@@ -362,6 +384,8 @@ Fields: `exploit_default`, `share_data_opt_in`, notification settings.
    *Note:* Move legality, castling, and en passant are now handled by python-chess to keep server state authoritative.
 
 > **Persistence.** By default the API uses a local SQLite file (`chessica.db`). Set `DATABASE_URL=postgresql://user:pass@host/dbname` to run against Postgres. Redis caching is enabled automatically when `REDIS_URL=redis://localhost:6379/0` (falls back to in-process TTL cache otherwise). Engine events stream into the `engine_events` table for later analytics.
+> **Schema note.** If you created `chessica.db` before the difficulty update, delete it (or run `ALTER TABLE sessions ADD COLUMN difficulty TEXT ...`, etc.) so the new columns (`difficulty`, `engine_depth`, `engine_rating`) exist before restarting the server.
+> **Engine defaults.** Tune the backend search depth globally with `ENGINE_DEFAULT_DEPTH` (default 3); per-session overrides are available via the `engine_depth` field or the frontend dropdown.
 
 ### 14.3 Frontend Prototype
 The `frontend/` directory contains a lightweight static UI that consumes the backend API.
@@ -372,10 +396,11 @@ The `frontend/` directory contains a lightweight static UI that consumes the bac
    cd frontend
    python3 -m http.server 4173
    ```
-3. Open `http://localhost:4173` and use the controls to create a session. Drag pieces directly on the board (or fall back to the UCI input) to submit moves, then read the explanations and stream output in real time.
+3. Open `http://localhost:4173` and use the controls to create a session. Choose an engine strength (depth 2–5), drag pieces directly on the board (or fall back to the UCI input) to submit moves, then read the explanations and stream output in real time.
 4. Use the **Session Analytics** panel’s “Refresh” button (or make moves) to fetch aggregated telemetry via `GET /api/v1/analytics/sessions/{id}/events`.
 
 > This prototype avoids build tooling; React/Vite can replace it later if desired.
+> The board uses [`chessboard-element`](https://github.com/justinfagnani/chessboard-element) and [`chess.js`](https://github.com/jhlywa/chess.js) via CDN, so ensure the frontend machine has internet access the first time it loads.
 
 ### 14.4 Next Development Targets
 1. Replace the mock engine/explanation pipeline with the real policy/value service + opponent model (GPU-backed inference + MCTS tie-in).

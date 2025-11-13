@@ -1,0 +1,63 @@
+"""SQLAlchemy models."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Dict, List
+
+from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
+
+from .database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class SessionModel(Base):
+    __tablename__ = "sessions"
+
+    session_id = Column(String, primary_key=True)
+    player_color = Column(String, nullable=False)
+    engine_color = Column(String, nullable=False)
+    exploit_mode = Column(String, nullable=False)
+    difficulty = Column(String, nullable=False, default="advanced")
+    engine_depth = Column(Integer, default=3, nullable=False)
+    engine_rating = Column(Integer, default=1200, nullable=False)
+    status = Column(String, default="active", nullable=False)
+    fen = Column(String, nullable=False)
+    clock_player_ms = Column(Integer, default=300000, nullable=False)
+    clock_engine_ms = Column(Integer, default=300000, nullable=False)
+    moves = Column(JSON, default=list, nullable=False)
+    opponent_profile = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "player_color": self.player_color,
+            "engine_color": self.engine_color,
+            "exploit_mode": self.exploit_mode,
+            "engine_depth": self.engine_depth,
+            "engine_rating": self.engine_rating,
+            "difficulty": self.difficulty,
+            "status": self.status,
+            "fen": self.fen,
+            "clock_player_ms": self.clock_player_ms,
+            "clock_engine_ms": self.clock_engine_ms,
+            "moves": list(self.moves or []),
+            "opponent_profile": self.opponent_profile,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+class EngineEventModel(Base):
+    __tablename__ = "engine_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String, index=True, nullable=False)
+    event_type = Column(String, nullable=False)
+    payload = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

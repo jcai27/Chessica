@@ -1,0 +1,278 @@
+:root {
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #e2e8f0;
+  background-color: #05091a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, rgba(34, 197, 94, 0.25), transparent 40%),
+    radial-gradient(circle at 25% 10%, rgba(59, 130, 246, 0.25), transparent 35%),
+    #05091a;
+  color: inherit;
+}
+
+.dashboard {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1.8rem;
+  border-radius: 24px;
+  background: linear-gradient(125deg, rgba(59, 130, 246, 0.22), rgba(16, 185, 129, 0.22));
+  border: 1px solid rgba(226, 232, 240, 0.1);
+  box-shadow: 0 25px 60px rgba(5, 10, 30, 0.6);
+}
+
+.hero h1 {
+  margin: 0.2rem 0;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  color: #f8fafc;
+}
+
+.hero .subtitle {
+  margin: 0;
+  color: #cbd5f5;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.75rem;
+  color: #a5b4fc;
+  margin: 0;
+}
+
+.status-card {
+  padding: 1rem 1.5rem;
+  border-radius: 16px;
+  background: rgba(9, 9, 25, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  text-align: right;
+  min-width: 260px;
+}
+
+.status-card h2 {
+  margin: 0.3rem 0 0;
+  font-size: 1.2rem;
+  color: #fefce8;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.5rem;
+}
+
+.left-column,
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+
+.card {
+  background: rgba(2, 6, 23, 0.8);
+  border-radius: 22px;
+  padding: 1.4rem 1.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.85);
+}
+
+.session-card select,
+.session-card input,
+.controls-card input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.55);
+  color: #f8fafc;
+}
+
+.session-card select:focus,
+.session-card input:focus,
+.controls-card input:focus {
+  outline: 2px solid rgba(16, 185, 129, 0.65);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #cbd5f5;
+}
+
+.form-grid .wide {
+  grid-column: span 2;
+}
+
+.session-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.session-actions span {
+  color: #a5b4fc;
+  font-size: 0.95rem;
+}
+
+.session-actions button {
+  padding: 0.65rem 1.3rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(130deg, #22d3ee, #16a34a);
+  color: #041018;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.session-actions button:active {
+  transform: scale(0.97);
+}
+
+.board-card {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+chess-board {
+  width: min(560px, 100%);
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  border: 3px solid rgba(148, 163, 184, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.5), 0 10px 30px rgba(15, 23, 42, 0.8);
+}
+
+.controls-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.controls-card .buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.controls-card button {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.controls-card button[type="submit"] {
+  background: #22c55e;
+  color: #041018;
+}
+
+#engineMoveBtn {
+  background: rgba(59, 130, 246, 0.2);
+  color: #cbd5f5;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.info-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.info-card pre,
+.logs-card pre,
+.stream-card pre {
+  background: rgba(5, 8, 24, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 0.75rem;
+  max-height: 130px;
+  overflow: auto;
+  color: #f8fafc;
+}
+
+.stream-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.stream-header button,
+#refreshAnalyticsBtn {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  color: #cbd5f5;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.analytics-summary {
+  font-weight: 500;
+  color: #2dd4bf;
+  margin-bottom: 0.8rem;
+}
+
+#analyticsEvents,
+#moveList {
+  max-height: 150px;
+  overflow: auto;
+  padding-left: 1.2rem;
+  color: #e2e8f0;
+}
+
+.timeline {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.timeline .card {
+  min-height: 180px;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  .timeline {
+    grid-template-columns: 1fr;
+  }
+  chess-board {
+    width: 100%;
+  }
+  .info-card {
+    grid-template-columns: 1fr;
+  }
+}

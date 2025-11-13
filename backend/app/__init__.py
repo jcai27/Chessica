@@ -1,0 +1,1 @@
+"""Chessica API package."""
