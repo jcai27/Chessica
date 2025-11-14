@@ -45,19 +45,12 @@ function updateDifficultyNote() {
   if (!option) return;
   const rating = option.dataset.rating ?? "";
   const depth = option.dataset.depth ?? "";
-  const label = option.textContent;
-  refs.difficultyNote.textContent = `${label} (depth ${depth || "?"})`;
+  refs.difficultyNote.textContent = `${option.textContent} (depth ${depth || "?"})`;  
 }
 
-function renderBoard(fen = START_FEN) {
-  try {
-    state.chess.load(fen);
-  } catch (error) {
-    console.warn("Invalid FEN received; falling back to start position.", error);
-    state.chess.load(START_FEN);
-  }
+function renderBoard() {
+  refs.board.setAttribute("orientation", state.playerColor);
   refs.board.setAttribute("position", state.chess.fen());
-  refs.board.orientation = state.playerColor;
   updateMoveControls();
 }
 
@@ -98,7 +91,7 @@ async function createSession(payload) {
   state.sessionId = session.session_id;
   state.playerColor = session.player_color;
   state.gameOver = false;
-  refs.board.orientation = state.playerColor;
+  state.chess.load(START_FEN);
   refs.sessionStatus.textContent = `Session ${session.session_id} · Engine plays ${
     session.engine_color
   } · ${capitalize(session.difficulty)} (~${session.engine_rating} Elo, depth ${session.engine_depth})`;
@@ -115,10 +108,11 @@ async function loadSessionDetail() {
   const detail = await res.json();
   state.sessionDetail = detail;
   state.movePairs = [];
+  state.chess.load(detail.fen);
   refs.sessionStatus.textContent = `Session ${detail.session_id} · Engine plays ${detail.engine_color} · ${capitalize(
     detail.difficulty,
   )} (~${detail.engine_rating} Elo, depth ${detail.engine_depth})`;
-  renderBoard(detail.fen);
+  renderBoard();
   refs.profileOutput.textContent = JSON.stringify(detail.opponent_profile, null, 2);
   refs.moveList.innerHTML = "";
   detail.moves.forEach((move, idx) => appendMoveListItem(idx + 1, move));
@@ -203,7 +197,8 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
   if (!res.ok) {
     const errorText = await res.text();
     log(`Move rejected: ${errorText}`);
-    renderBoard(previousFen);
+    state.chess.load(previousFen);
+    renderBoard();
     alert("Move failed; see log for details.");
     throw new Error(errorText);
   }
@@ -214,7 +209,8 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
     fen: response.game_state.fen,
     opponent_profile: response.opponent_profile,
   };
-  renderBoard(response.game_state.fen);
+  state.chess.load(response.game_state.fen);
+  renderBoard();
   refs.profileOutput.textContent = JSON.stringify(response.opponent_profile, null, 2);
   refs.explanationSummary.textContent = response.explanation.summary;
   refs.explanationDetails.innerHTML = `
@@ -350,12 +346,12 @@ refs.board.addEventListener("drag-start", (event) => {
 });
 
 refs.board.addEventListener("drop", async (event) => {
-  const { source, target, piece, setAction } = event.detail;
+  const { source, target, setAction } = event.detail;
   if (!state.sessionId || state.gameOver || !isPlayersTurn()) {
     setAction("snapback");
     return;
   }
-  const move = findMove(source, target);
+  const move = state.chess.moves({ verbose: true }).find((m) => m.from === source && m.to === target);
   if (!move) {
     setAction("snapback");
     return;
@@ -369,14 +365,9 @@ refs.board.addEventListener("drop", async (event) => {
   }
 });
 
-function findMove(from, to) {
-  const moves = state.chess.moves({ verbose: true });
-  return moves.find((move) => move.from === from && move.to === to);
-}
-
 function capitalize(value) {
   if (!value) return "";
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-renderBoard(START_FEN);
+renderBoard();

@@ -132,10 +132,15 @@ async def make_move(
     if board.active_color != engine_turn:
         raise HTTPException(status_code=409, detail="Engine is waiting for the player move.")
 
+    board_before_engine_move = board.copy()
     try:
-        engine_move, eval_cp = engine.pick_engine_move(board, engine_turn, record.engine_depth)
+        engine_move, eval_cp = engine.pick_engine_move(board, record.difficulty, record.engine_rating)
     except ValueError:
         raise HTTPException(status_code=410, detail="Engine has no legal moves (game over).") from None
+
+    explanation = engine.explain_engine_move(
+        board_before_engine_move, engine_move, eval_cp, record.engine_color
+    )
 
     board.apply_uci(engine_move)
     record.moves.append(engine_move)
@@ -147,7 +152,6 @@ async def make_move(
 
     record = store.save(record)
 
-    explanation = engine.mock_explanation(engine_move)
     exploit_confidence = engine.mock_exploit_confidence()
     game_state = engine.make_game_state(board)
 

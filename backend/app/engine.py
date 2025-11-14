@@ -1,277 +1,310 @@
-"""Lightweight heuristic engine with alpha-beta search."""
+"""Stockfish-backed engine helpers."""
 
 from __future__ import annotations
 
-import math
-from random import choice, random
+import atexit
+import os
+import shlex
+import threading
+from pathlib import Path
 
 import chess
+import chess.engine
 
+from .config import settings
 from .board import Board
-from .schemas import Explanation, GameState, OpponentProfile
 
-SAMPLE_MOTIFS = ["forks", "back_rank", "time_trouble", "endgame"]
-CHECKMATE_SCORE = 100_000
-CHECK_BONUS = 50
-MOBILITY_WEIGHT = 5
-KING_SHIELD_BONUS = 15
-QUIESCENCE_MAX = 4
+ENGINE_LOCK = threading.Lock()
+ENGINE: chess.engine.SimpleEngine | None = None
 
-PIECE_VALUES = {
-    chess.PAWN: 100,
-    chess.KNIGHT: 320,
-    chess.BISHOP: 330,
-    chess.ROOK: 500,
-    chess.QUEEN: 900,
-    chess.KING: 0,
-}
-
-PAWN_TABLE = [
-     0,  5,  5, -10, -10,  5,  5,  0,
-     0, 10, -5,   0,   0, -5, 10,  0,
-     0, 10, 10,  20,  20, 10, 10,  0,
-     5, 15, 15,  25,  25, 15, 15,  5,
-    10, 20, 20,  30,  30, 20, 20, 10,
-    15, 25, 25,  35,  35, 25, 25, 15,
-    20, 30, 30,  40,  40, 30, 30, 20,
-     0,  0,  0,   0,   0,  0,  0,  0,
-]
-
-KNIGHT_TABLE = [
-   -50, -30, -10, -10, -10, -10, -30, -50,
-   -30,  10,  15,  20,  20,  15,  10, -30,
-   -10,  15,  25,  30,  30,  25,  15, -10,
-   -10,  20,  30,  35,  35,  30,  20, -10,
-   -10,  20,  30,  35,  35,  30,  20, -10,
-   -10,  15,  25,  30,  30,  25,  15, -10,
-   -30,  10,  15,  20,  20,  15,  10, -30,
-   -50, -30, -10, -10, -10, -10, -30, -50,
-]
-
-BISHOP_TABLE = [
-   -20, -10, -10, -10, -10, -10, -10, -20,
-   -10,  10,  10,  10,  10,  10,  10, -10,
-   -10,  10,  15,  15,  15,  15,  10, -10,
-   -10,  10,  15,  20,  20,  15,  10, -10,
-   -10,  10,  15,  20,  20,  15,  10, -10,
-   -10,  10,  15,  15,  15,  15,  10, -10,
-   -10,  15,  10,  10,  10,  10,  15, -10,
-   -20, -10, -10, -10, -10, -10, -10, -20,
-]
-
-ROOK_TABLE = [
-     0,   0,   5,  10,  10,   5,   0,   0,
-    10,  20,  20,  20,  20,  20,  20,  10,
-     5,  10,  10,  10,  10,  10,  10,   5,
-     0,   0,   5,  10,  10,   5,   0,   0,
-     0,   0,   5,  10,  10,   5,   0,   0,
-     5,  10,  10,  10,  10,  10,  10,   5,
-    10,  20,  20,  20,  20,  20,  20,  10,
-     0,   0,   5,  10,  10,   5,   0,   0,
-]
-
-QUEEN_TABLE = [
-   -20, -10, -10,  -5,  -5, -10, -10, -20,
-   -10,   0,   5,   0,   0,   5,   0, -10,
-   -10,   5,   5,   5,   5,   5,   5, -10,
-    -5,   0,   5,   5,   5,   5,   0,  -5,
-     0,   0,   5,   5,   5,   5,   0,  -5,
-   -10,   5,   5,   5,   5,   5,   5, -10,
-   -10,   0,   5,   0,   0,   5,   0, -10,
-   -20, -10, -10,  -5,  -5, -10, -10, -20,
-]
-
-KING_TABLE = [
-    20,  30,  10,   0,   0,  10,  30,  20,
-    20,  20,   0,   0,   0,   0,  20,  20,
-   -10, -20, -20, -20, -20, -20, -20, -10,
-   -20, -30, -30, -40, -40, -30, -30, -20,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-]
-
-PIECE_SQUARE_TABLES = {
-    chess.PAWN: PAWN_TABLE,
-    chess.KNIGHT: KNIGHT_TABLE,
-    chess.BISHOP: BISHOP_TABLE,
-    chess.ROOK: ROOK_TABLE,
-    chess.QUEEN: QUEEN_TABLE,
-    chess.KING: KING_TABLE,
+DIFFICULTY_SETTINGS: dict[str, dict[str, float | int]] = {
+    "beginner": {"skill": 1, "elo": 900, "move_time": 0.2},
+    "intermediate": {"skill": 5, "elo": 1200, "move_time": 0.25},
+    "advanced": {"skill": 10, "elo": 1600, "move_time": 0.35},
+    "expert": {"skill": 15, "elo": 2000, "move_time": 0.45},
+    "grandmaster": {"skill": 20, "elo": 2400, "move_time": 0.6},
+    "custom": {"skill": 15, "elo": 2000, "move_time": 0.4},
 }
 
 
-def pick_engine_move(board: Board, color: str, depth: int) -> tuple[str, int]:
-    if board.active_color != color:
-        raise ValueError("Engine turn mismatch")
-
-    depth = max(1, min(depth, 5))
-    root = board.raw.copy(stack=True)
-    engine_is_white = color == "w"
-
-    alpha = -math.inf
-    beta = math.inf
-    best_score = -math.inf
-    best_move = None
-
-    for move in order_moves(root):
-        root.push(move)
-        score = -negamax(root, depth - 1, -beta, -alpha, engine_is_white)
-        root.pop()
-        if score > best_score:
-            best_score = score
-            best_move = move
-        alpha = max(alpha, score)
-
-    if best_move is None:
-        raise ValueError("No legal moves available for engine.")
-
-    eval_cp = CHECKMATE_SCORE if math.isinf(best_score) else int(best_score)
-    return best_move.uci(), eval_cp
+def _engine_cmd() -> list[str]:
+    path = Path(settings.stockfish_path).expanduser()
+    if not path.exists():
+        raise FileNotFoundError(f"Stockfish executable not found at {path}.")
+    cmd = str(path)
+    if os.name == "nt":
+        return [cmd]
+    return shlex.split(cmd)
 
 
-def negamax(board: chess.Board, depth: int, alpha: float, beta: float, engine_is_white: bool) -> float:
-    if depth == 0 or board.is_game_over():
-        return quiescence(board, alpha, beta, engine_is_white)
-
-    value = -math.inf
-    for move in order_moves(board):
-        board.push(move)
-        score = -negamax(board, depth - 1, -beta, -alpha, engine_is_white)
-        board.pop()
-        value = max(value, score)
-        alpha = max(alpha, score)
-        if alpha >= beta:
-            break
-    return value
+def _shutdown_engine() -> None:
+    global ENGINE
+    if ENGINE is not None:
+        try:
+            ENGINE.quit()
+        finally:
+            ENGINE = None
 
 
-def quiescence(board: chess.Board, alpha: float, beta: float, engine_is_white: bool, depth: int = 0) -> float:
-    stand_pat = evaluate_position(board, engine_is_white)
-    if stand_pat >= beta:
-        return beta
-    if alpha < stand_pat:
-        alpha = stand_pat
-
-    if depth >= QUIESCENCE_MAX:
-        return stand_pat
-
-    for move in board.legal_moves:
-        if not board.is_capture(move):
-            continue
-        board.push(move)
-        score = -quiescence(board, -beta, -alpha, engine_is_white, depth + 1)
-        board.pop()
-
-        if score >= beta:
-            return beta
-        if score > alpha:
-            alpha = score
-    return alpha
+def _get_engine() -> chess.engine.SimpleEngine:
+    global ENGINE
+    if ENGINE is None:
+        ENGINE = chess.engine.SimpleEngine.popen_uci(_engine_cmd())
+        atexit.register(_shutdown_engine)
+    return ENGINE
 
 
-def order_moves(board: chess.Board) -> list[chess.Move]:
-    def move_score(move: chess.Move) -> int:
-        score = 0
-        if board.is_capture(move):
-            captured = board.piece_at(move.to_square)
-            attacker = board.piece_at(move.from_square)
-            if captured:
-                score += 10 * PIECE_VALUES[captured.piece_type]
-            if attacker:
-                score -= PIECE_VALUES[attacker.piece_type]
-        if board.gives_check(move):
-            score += CHECK_BONUS
-        if move.promotion:
-            score += PIECE_VALUES.get(move.promotion, 0)
-        return score
-
-    moves = list(board.legal_moves)
-    moves.sort(key=move_score, reverse=True)
-    return moves
+def _difficulty_profile(difficulty: str, engine_rating: int) -> dict[str, float | int]:
+    if difficulty in DIFFICULTY_SETTINGS:
+        profile = DIFFICULTY_SETTINGS[difficulty].copy()
+    else:
+        profile = DIFFICULTY_SETTINGS["custom"].copy()
+    profile["elo"] = engine_rating
+    move_time = float(profile.get("move_time", settings.engine_move_time_limit))
+    profile["move_time"] = min(settings.engine_move_time_limit, move_time)
+    return profile
 
 
-def evaluate_position(board: chess.Board, engine_is_white: bool) -> float:
-    if board.is_checkmate():
-        loser_is_engine = board.turn == (chess.WHITE if engine_is_white else chess.BLACK)
-        return -CHECKMATE_SCORE if loser_is_engine else CHECKMATE_SCORE
-    if board.is_stalemate():
+def _score_to_cp(score: chess.engine.PovScore | None) -> int:
+    if score is None:
         return 0
-
-    score = 0.0
-    for square, piece in board.piece_map().items():
-        piece_value = PIECE_VALUES[piece.piece_type]
-        pst = piece_square_value(piece, square)
-        contribution = piece_value + pst
-        score += contribution if piece.color == chess.WHITE else -contribution
-
-    if not engine_is_white:
-        score = -score
-
-    mobility_diff = mobility(board, engine_is_white) - mobility(board, not engine_is_white)
-    score += MOBILITY_WEIGHT * mobility_diff
-    score += king_safety(board, engine_is_white)
-    score += random() * 2
-    return score
+    pov = score.white()
+    if pov.is_mate():
+        mate_score = CHECKMATE_CP if pov.mate() and pov.mate() > 0 else -CHECKMATE_CP
+        return mate_score
+    return pov.score() or 0
 
 
-def mobility(board: chess.Board, color_is_white: bool) -> int:
-    clone = board.copy(stack=False)
-    clone.turn = chess.WHITE if color_is_white else chess.BLACK
-    return clone.legal_moves.count()
+CHECKMATE_CP = 10000
 
 
-def king_safety(board: chess.Board, engine_is_white: bool) -> float:
-    king_square = board.king(chess.WHITE if engine_is_white else chess.BLACK)
-    if king_square is None:
-        return 0
-    shield = 0
-    king_rank = chess.square_rank(king_square)
-    direction = -1 if engine_is_white else 1
-    for file_delta in (-1, 0, 1):
-        file_index = chess.square_file(king_square) + file_delta
-        rank_index = king_rank + direction
-        if 0 <= file_index < 8 and 0 <= rank_index < 8:
-            sq = chess.square(file_index, rank_index)
-            piece = board.piece_at(sq)
-            if piece and piece.piece_type == chess.PAWN and piece.color == (chess.WHITE if engine_is_white else chess.BLACK):
-                shield += KING_SHIELD_BONUS
-    return shield
+def pick_engine_move(board: Board, difficulty: str, engine_rating: int) -> tuple[str, int]:
+    if board.raw.is_game_over():
+        raise ValueError("Game already over.")
+
+    profile = _difficulty_profile(difficulty, engine_rating)
+    think_time = max(0.05, min(settings.engine_move_time_limit, float(profile["move_time"])))
+    skill = int(profile.get("skill", 15))
+    limit = chess.engine.Limit(time=think_time)
+
+    with ENGINE_LOCK:
+        engine = _get_engine()
+        try:
+            engine.configure(
+                {
+                    "Skill Level": max(0, min(20, skill)),
+                    "UCI_LimitStrength": True,
+                    "UCI_Elo": max(600, min(2850, int(profile["elo"]))),
+                }
+            )
+        except chess.engine.EngineTerminatedError:
+            _shutdown_engine()
+            engine = _get_engine()
+        result = engine.play(board.raw, limit, info=chess.engine.INFO_SCORE)
+        if result.move is None:
+            raise ValueError("Engine failed to return a move.")
+        eval_cp = _score_to_cp(result.info.get("score"))
+        return result.move.uci(), eval_cp
 
 
-def piece_square_value(piece: chess.Piece, square: chess.Square) -> int:
-    table = PIECE_SQUARE_TABLES.get(piece.piece_type)
-    if not table:
-        return 0
-    index = square if piece.color == chess.WHITE else chess.square_mirror(square)
-    return table[index]
+def make_game_state(board: Board) -> "GameState":
+    from .schemas import GameState
 
-
-def mock_exploit_confidence() -> float:
-    return round(0.4 + random() * 0.5, 2)
-
-
-def mock_opponent_profile() -> OpponentProfile:
-    motif_scores = {motif: round(random(), 2) for motif in SAMPLE_MOTIFS[:3]}
-    return OpponentProfile(
-        style={"tactical": round(random(), 2), "risk": round(random(), 2)},  # type: ignore[arg-type]
-        motif_risk=motif_scores,
-    )
-
-
-def mock_explanation(move: str) -> Explanation:
-    return Explanation(
-        summary=f"Steers toward {choice(SAMPLE_MOTIFS)} patterns aligned with observed weaknesses.",
-        objective_cost_cp=choice([5, 12, 18]),
-        alt_best_move="g8f6",
-        alt_eval_cp=choice([25, 40, 55]),
-    )
-
-
-def make_game_state(board: Board) -> GameState:
     return GameState(
         fen=board.to_fen(),
         move_number=board.fullmove,
         turn="white" if board.active_color == "w" else "black",
     )
+
+
+def mock_opponent_profile() -> "OpponentProfile":
+    from random import random
+
+    from .schemas import OpponentProfile
+
+    return OpponentProfile(
+        style={"tactical": round(random(), 2), "risk": round(random(), 2)},  # type: ignore[arg-type]
+        motif_risk={"forks": round(random(), 2), "back_rank": round(random(), 2)},
+    )
+
+
+def mock_exploit_confidence() -> float:
+    from random import random
+
+    return round(0.4 + random() * 0.5, 2)
+
+
+def explain_engine_move(board: Board, move_uci: str, eval_cp: int, engine_color: str) -> "Explanation":
+    from .schemas import Explanation
+
+    move = chess.Move.from_uci(move_uci)
+    snapshot = board.raw
+    if move not in snapshot.legal_moves:
+        raise ValueError(f"Move {move_uci} is not legal in the given position.")
+    mover_color = snapshot.turn
+    analysis_board = snapshot.copy()
+    analysis_board.push(move)
+    summary = _summarize_move(snapshot, analysis_board, move, mover_color, engine_color, eval_cp)
+    return Explanation(
+        summary=summary,
+        objective_cost_cp=0,
+        alt_best_move="-",
+        alt_eval_cp=eval_cp,
+    )
+
+
+_PIECE_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+    chess.KING: 20000,
+}
+
+
+def _summarize_move(
+    before: chess.Board,
+    after: chess.Board,
+    move: chess.Move,
+    mover_color: chess.Color,
+    engine_color: str,
+    eval_cp: int,
+) -> str:
+    parts: list[str] = []
+    parts.append(_primary_action_sentence(before, after, move, mover_color))
+    parts.extend(_follow_up_sentences(after, move, mover_color))
+    score_blurb = _score_sentence(eval_cp, engine_color)
+    if score_blurb:
+        parts.append(score_blurb)
+    return " ".join(part for part in parts if part).strip()
+
+
+def _primary_action_sentence(
+    before: chess.Board, after: chess.Board, move: chess.Move, mover_color: chess.Color
+) -> str:
+    piece_type = before.piece_type_at(move.from_square)
+    piece_name = chess.piece_name(piece_type or chess.PAWN)
+    destination = chess.square_name(move.to_square)
+    if before.is_castling(move):
+        side = "kingside" if chess.square_file(move.to_square) > chess.square_file(move.from_square) else "queenside"
+        return f"Castles {side} to tuck the king away and mobilize the rook."
+    if move.promotion:
+        promo_name = chess.piece_name(move.promotion)
+        return f"Promotes the pawn on {destination} into a {promo_name}, adding a fresh attacker."
+    if before.is_capture(move):
+        target_square = move.to_square
+        target_piece = before.piece_type_at(move.to_square)
+        if target_piece is None and before.is_en_passant(move):
+            offset = -8 if mover_color == chess.WHITE else 8
+            target_square = move.to_square + offset
+            target_piece = chess.PAWN
+        captured = chess.piece_name(target_piece or chess.PAWN)
+        return f"{piece_name.title()} captures your {captured} on {chess.square_name(target_square)}."
+    if piece_type == chess.PAWN:
+        text = f"Advances the pawn to {destination}"
+    elif piece_type in (chess.KNIGHT, chess.BISHOP, chess.QUEEN) and _is_strong_center(move.to_square):
+        text = f"Centralizes the {piece_name} on {destination}"
+    else:
+        text = f"Repositions the {piece_name} to {destination}"
+    if piece_type == chess.ROOK and _file_is_open(after, move.to_square):
+        text += " to seize the open file"
+    return f"{text}."
+
+
+def _follow_up_sentences(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> list[str]:
+    details: list[str] = []
+    if after.is_checkmate():
+        details.append("The move delivers checkmate.")
+        return details
+    if after.is_check():
+        details.append("It also checks your king.")
+    threat = _threat_sentence(after, move, mover_color)
+    if threat:
+        details.append(threat)
+    if _creates_passed_pawn(after, move, mover_color):
+        details.append("The pawn is now passed and can become a long-term asset.")
+    if _aligns_with_king(after, move, mover_color):
+        details.append("The move lines up directly with your king, increasing pressure.")
+    return details
+
+
+def _threat_sentence(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> str:
+    targets: list[tuple[int, chess.Piece, int]] = []
+    for square in after.attacks(move.to_square):
+        piece = after.piece_at(square)
+        if piece and piece.color != mover_color:
+            value = _PIECE_VALUES.get(piece.piece_type, 0)
+            targets.append((value, piece, square))
+    if not targets:
+        return ""
+    _, piece, square = max(targets, key=lambda item: item[0])
+    name = chess.piece_name(piece.piece_type)
+    square_name = chess.square_name(square)
+    if piece.piece_type == chess.KING:
+        return "It forces your king to stay alert to new threats."
+    return f"It now threatens your {name} on {square_name}."
+
+
+def _score_sentence(eval_cp: int, engine_color: str) -> str:
+    perspective = eval_cp if engine_color == "white" else -eval_cp
+    if abs(perspective) < 40:
+        return "Engine evaluation keeps the position roughly level."
+    pawns = abs(perspective) / 100
+    formatted = f"{pawns:.2f}".rstrip("0").rstrip(".")
+    if perspective > 0:
+        return f"The engine sees itself ahead by about {formatted} pawns."
+    return f"The engine still trails by roughly {formatted} pawns."
+
+
+def _is_strong_center(square: chess.Square) -> bool:
+    file_idx = chess.square_file(square)
+    rank_idx = chess.square_rank(square)
+    return 2 <= file_idx <= 5 and 2 <= rank_idx <= 5
+
+
+def _file_is_open(board: chess.Board, square: chess.Square) -> bool:
+    file_idx = chess.square_file(square)
+    for rank in range(8):
+        sq = chess.square(file_idx, rank)
+        piece = board.piece_at(sq)
+        if piece and piece.piece_type == chess.PAWN:
+            return False
+    return True
+
+
+def _creates_passed_pawn(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
+    piece = after.piece_at(move.to_square)
+    if not piece or piece.piece_type != chess.PAWN:
+        return False
+    enemy = chess.BLACK if mover_color == chess.WHITE else chess.WHITE
+    file_idx = chess.square_file(move.to_square)
+    rank_idx = chess.square_rank(move.to_square)
+    direction = 1 if mover_color == chess.WHITE else -1
+    next_rank = rank_idx + direction
+    while 0 <= next_rank < 8:
+        for adj_file in (file_idx - 1, file_idx, file_idx + 1):
+            if not (0 <= adj_file < 8):
+                continue
+            sq = chess.square(adj_file, next_rank)
+            target = after.piece_at(sq)
+            if target and target.color == enemy and target.piece_type == chess.PAWN:
+                return False
+        next_rank += direction
+    return True
+
+
+def _aligns_with_king(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
+    slider = after.piece_at(move.to_square)
+    if not slider or slider.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+        return False
+    enemy_king = after.king(chess.BLACK if mover_color == chess.WHITE else chess.WHITE)
+    if enemy_king is None:
+        return False
+    between_mask = chess.between(enemy_king, move.to_square)
+    if between_mask == 0:
+        return False
+    for sq in chess.SquareSet(between_mask):
+        if after.piece_at(sq):
+            return False
+    return True

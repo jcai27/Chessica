@@ -350,9 +350,13 @@ Fields: `exploit_default`, `share_data_opt_in`, notification settings.
 ```
 
 ### 14.2 Running the API Locally
-1. **Install dependencies**
+1. **Install dependencies + Stockfish**
    ```bash
    cd backend
+   # Install Stockfish (example for Ubuntu/WSL)
+   sudo apt install stockfish
+   # Optional: point the API to your binary
+   export STOCKFISH_PATH=/usr/bin/stockfish
    poetry install
    ```
 2. **Run the dev server**
@@ -382,6 +386,12 @@ Fields: `exploit_default`, `share_data_opt_in`, notification settings.
    }
    ```
    *Note:* Move legality, castling, and en passant are now handled by python-chess to keep server state authoritative.
+
+> **Persistence.** By default the API uses a local SQLite file (`chessica.db`). Set `DATABASE_URL=postgresql://user:pass@host/dbname` to run against Postgres. Redis caching is enabled automatically when `REDIS_URL=redis://localhost:6379/0` (falls back to in-process TTL cache otherwise). Engine events stream into the `engine_events` table for later analytics.
+>
+> **Engine defaults.** Engine moves now come from Stockfish. Tune the global defaults with `ENGINE_DEFAULT_DEPTH` or override per session using the difficulty dropdown/field. Each preset maps to Stockfish `Skill Level`, `UCI_Elo`, and a sub-second move time so responses stay <1 s.
+>
+> **Schema note.** If you created `chessica.db` before the difficulty update, delete it (or run the appropriate `ALTER TABLE sessions ADD COLUMN ...`) so the new columns (`difficulty`, `engine_depth`, `engine_rating`) exist before restarting the server.
 
 > **Persistence.** By default the API uses a local SQLite file (`chessica.db`). Set `DATABASE_URL=postgresql://user:pass@host/dbname` to run against Postgres. Redis caching is enabled automatically when `REDIS_URL=redis://localhost:6379/0` (falls back to in-process TTL cache otherwise). Engine events stream into the `engine_events` table for later analytics.
 > **Schema note.** If you created `chessica.db` before the difficulty update, delete it (or run `ALTER TABLE sessions ADD COLUMN difficulty TEXT ...`, etc.) so the new columns (`difficulty`, `engine_depth`, `engine_rating`) exist before restarting the server.

@@ -7,127 +7,113 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="https://unpkg.com/chessboard-element?module"></script>
+    <script type="module" src="https://cdn.skypack.dev/chess.js@1.0.0"></script>
   </head>
   <body>
-    <div class="dashboard">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Chessica</p>
-          <h1>Exploit-Aware Chess Companion</h1>
-          <p class="subtitle">Spin up a session, drag pieces, and watch the engine adapt to your style.</p>
-        </div>
-        <div class="status-card">
-          <p>Session Status</p>
-          <h2 id="sessionStatus">No active session</h2>
-        </div>
+    <div class="app">
+      <header>
+        <h1>Chessica Frontend Prototype</h1>
+        <p>Interact with the exploit-aware engine API without Postman.</p>
       </header>
 
-      <main class="workspace">
-        <section class="left-column">
-          <div class="card session-card">
-            <h2>Session Setup</h2>
-            <form id="sessionForm">
-              <div class="form-grid">
-                <label>
-                  Color
-                  <select name="color">
-                    <option value="auto" selected>Auto</option>
-                    <option value="white">White</option>
-                    <option value="black">Black</option>
-                  </select>
-                </label>
-                <label>
-                  Exploit Mode
-                  <select name="exploit_mode">
-                    <option value="auto" selected>Auto</option>
-                    <option value="on">On</option>
-                    <option value="off">Off</option>
-                  </select>
-                </label>
-                <label>
-                  Initial Time (sec)
-                  <input name="initial" type="number" value="300" min="60" step="30" />
-                </label>
-                <label>
-                  Increment (sec)
-                  <input name="increment" type="number" value="2" min="0" step="1" />
-                </label>
-                <label class="wide">
-                  Difficulty
-                  <select name="difficulty" id="difficultySelect">
-                    <option value="beginner" data-depth="1" data-rating="800">Beginner (~800 Elo)</option>
-                    <option value="intermediate" data-depth="2" data-rating="1200">Intermediate (~1200 Elo)</option>
-                    <option value="advanced" data-depth="3" data-rating="1600" selected>Advanced (~1600 Elo)</option>
-                    <option value="expert" data-depth="4" data-rating="2000">Expert (~2000 Elo)</option>
-                    <option value="grandmaster" data-depth="5" data-rating="2400">Grandmaster (~2400 Elo)</option>
-                  </select>
-                </label>
-              </div>
-              <div class="session-actions">
-                <span id="difficultyNote">Balanced (~1600 Elo, depth 3)</span>
-                <button type="submit">Launch Session</button>
-              </div>
-            </form>
+      <section class="session-controls">
+        <form id="sessionForm">
+          <label>
+            Color
+            <select name="color">
+              <option value="auto" selected>Auto</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+            </select>
+          </label>
+          <label>
+            Exploit Mode
+            <select name="exploit_mode">
+              <option value="auto" selected>Auto</option>
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label>
+            Initial Time (sec)
+            <input name="initial" type="number" value="300" min="60" step="30" />
+          </label>
+          <label>
+            Increment (sec)
+            <input name="increment" type="number" value="2" min="0" step="1" />
+          </label>
+          <label>
+            Difficulty
+            <select name="difficulty" id="difficultySelect">
+              <option value="beginner" data-depth="1" data-rating="800">Beginner (~800 Elo)</option>
+              <option value="intermediate" data-depth="2" data-rating="1200">Intermediate (~1200 Elo)</option>
+              <option value="advanced" data-depth="3" data-rating="1600" selected>Advanced (~1600 Elo)</option>
+              <option value="expert" data-depth="4" data-rating="2000">Expert (~2000 Elo)</option>
+              <option value="grandmaster" data-depth="5" data-rating="2400">Grandmaster (~2400 Elo)</option>
+            </select>
+          </label>
+          <div class="difficulty-indicator">
+            <span id="difficultyNote">Balanced (~1600 Elo, depth 3)</span>
           </div>
+          <button type="submit">Start Session</button>
+        </form>
+        <div id="sessionStatus" class="status">No active session</div>
+      </section>
 
-          <div class="card board-card">
-            <chess-board id="board" draggable-pieces coordinates></chess-board>
-          </div>
-        </section>
-
-        <section class="right-column">
-          <div class="card controls-card">
-            <h2>Move Console</h2>
+      <section class="board-and-panels">
+        <chess-board id="board" draggable-pieces coordinates></chess-board>
+        <div class="panels">
+          <div class="panel">
+            <h2>Move Control</h2>
             <form id="moveForm">
               <label>
-                Enter UCI Move
+                Your Move (UCI)
                 <input name="uci" type="text" placeholder="e2e4" autocomplete="off" />
               </label>
               <div class="buttons">
                 <button type="submit">Submit Move</button>
-                <button type="button" id="engineMoveBtn">Let Engine Move</button>
+                <button type="button" id="engineMoveBtn">Ask Engine to Move</button>
               </div>
             </form>
-          </div>
-
-          <div class="card info-card">
-            <div>
+            <div class="profile">
               <h3>Opponent Profile</h3>
               <pre id="profileOutput">—</pre>
             </div>
-            <div>
-              <h3>Explanation</h3>
-              <p id="explanationSummary">No moves yet.</p>
-              <ul id="explanationDetails"></ul>
-            </div>
           </div>
 
-          <div class="card stream-card">
-            <div class="stream-header">
-              <h3>Engine Stream</h3>
-              <button type="button" id="refreshAnalyticsBtn">Refresh Analytics</button>
-            </div>
+          <div class="panel">
+            <h2>Explanation</h2>
+            <p id="explanationSummary">No moves yet.</p>
+            <ul id="explanationDetails"></ul>
+          </div>
+
+          <div class="panel">
+            <h2>Engine Stream</h2>
             <pre id="streamOutput">Connect via session start.</pre>
           </div>
+        </div>
+      </section>
 
-          <div class="card analytics-card">
+      <section class="move-list">
+        <h2>Moves</h2>
+        <ol id="moveList"></ol>
+      </section>
+
+      <section class="logs">
+        <h2>Event Log</h2>
+        <pre id="eventLog"></pre>
+      </section>
+
+      <section class="analytics">
+        <div class="panel">
+          <div class="panel-header">
             <h2>Session Analytics</h2>
-            <div id="analyticsSummary" class="analytics-summary">Start a session to view analytics.</div>
-            <ol id="analyticsEvents"></ol>
+            <button type="button" id="refreshAnalyticsBtn">Refresh</button>
           </div>
-        </section>
-
-        <section class="timeline">
-          <div class="card moves-card">
-            <h2>Move Timeline</h2>
-            <ol id="moveList"></ol>
-          </div>
-          <div class="card logs-card">
-            <h2>Event Log</h2>
-            <pre id="eventLog"></pre>
-          </div>
-        </section>
-      </main>
+          <div id="analyticsSummary" class="analytics-summary">Start a session to view analytics.</div>
+          <ol id="analyticsEvents"></ol>
+        </div>
+      </section>
     </div>
 
     <script type="module" src="./app.js"></script>

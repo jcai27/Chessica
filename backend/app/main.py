@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import analysis, analytics, sessions, stream, users
 from .config import settings
 from .database import Base, engine
+
+if hasattr(asyncio, "WindowsProactorEventLoopPolicy"):
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 app = FastAPI(title=settings.project_name)
 
