@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chessica Demo UI</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chessica Control Room</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="https://unpkg.com/chessboard-element?module"></script>
@@ -11,13 +11,19 @@
   </head>
   <body>
     <div class="app">
-      <header>
-        <h1>Chessica Frontend Prototype</h1>
-        <p>Interact with the exploit-aware engine API without Postman.</p>
+      <header class="hero">
+        <div class="hero-title">
+          <div class="badge">♞</div>
+          <div>
+            <h1>Chessica Control Room</h1>
+            <p>Exploit-aware chess sessions with live narration.</p>
+          </div>
+        </div>
+        <span class="pill">Alpha</span>
       </header>
 
-      <section class="session-controls">
-        <form id="sessionForm">
+      <section class="controls card">
+        <form id="sessionForm" class="controls-form">
           <label>
             Color
             <select name="color">
@@ -45,11 +51,11 @@
           <label>
             Difficulty
             <select name="difficulty" id="difficultySelect">
-              <option value="beginner" data-depth="1" data-rating="800">Beginner (~800 Elo)</option>
-              <option value="intermediate" data-depth="2" data-rating="1200">Intermediate (~1200 Elo)</option>
-              <option value="advanced" data-depth="3" data-rating="1600" selected>Advanced (~1600 Elo)</option>
-              <option value="expert" data-depth="4" data-rating="2000">Expert (~2000 Elo)</option>
-              <option value="grandmaster" data-depth="5" data-rating="2400">Grandmaster (~2400 Elo)</option>
+              <option value="beginner" data-depth="1" data-rating="800">Beginner (~800)</option>
+              <option value="intermediate" data-depth="2" data-rating="1200">Intermediate (~1200)</option>
+              <option value="advanced" data-depth="3" data-rating="1600" selected>Advanced (~1600)</option>
+              <option value="expert" data-depth="4" data-rating="2000">Expert (~2000)</option>
+              <option value="grandmaster" data-depth="5" data-rating="2400">Grandmaster (~2400)</option>
             </select>
           </label>
           <div class="difficulty-indicator">
@@ -57,63 +63,88 @@
           </div>
           <button type="submit">Start Session</button>
         </form>
-        <div id="sessionStatus" class="status">No active session</div>
       </section>
 
-      <section class="board-and-panels">
-        <chess-board id="board" draggable-pieces coordinates></chess-board>
-        <div class="panels">
-          <div class="panel">
-            <h2>Move Control</h2>
-            <form id="moveForm">
+      <main class="layout">
+        <div class="left-column">
+          <section class="card board-card">
+            <div class="card-header">
+              <h2>Live Board</h2>
+              <span>orientation auto-adjusts</span>
+            </div>
+            <div class="board-shell">
+              <chess-board id="board" draggable-pieces coordinates></chess-board>
+            </div>
+          </section>
+        </div>
+
+        <div class="right-column">
+          <section class="card console-card">
+            <div class="card-header">
+              <div>
+                <h2>Move Console</h2>
+                <span>issue commands or let Chessica reply</span>
+              </div>
+              <span class="session-chip" id="sessionStatus">No active session</span>
+            </div>
+            <form id="moveForm" class="move-form">
               <label>
                 Your Move (UCI)
                 <input name="uci" type="text" placeholder="e2e4" autocomplete="off" />
               </label>
-              <div class="buttons">
+              <div class="button-row">
                 <button type="submit">Submit Move</button>
                 <button type="button" id="engineMoveBtn">Ask Engine to Move</button>
               </div>
             </form>
-            <div class="profile">
-              <h3>Opponent Profile</h3>
+            <div class="profile-block">
+              <h3>Opponent Snapshot</h3>
               <pre id="profileOutput">—</pre>
             </div>
-          </div>
+          </section>
 
-          <div class="panel">
-            <h2>Explanation</h2>
+          <section class="card explanation-card">
+            <div class="card-header">
+              <h2>Move Narrative</h2>
+              <span>themes & tactics</span>
+            </div>
             <p id="explanationSummary">No moves yet.</p>
             <ul id="explanationDetails"></ul>
-          </div>
+          </section>
 
-          <div class="panel">
-            <h2>Engine Stream</h2>
+          <section class="card stream-card">
+            <div class="card-header">
+              <h2>Engine Stream</h2>
+              <span>websocket feed</span>
+            </div>
             <pre id="streamOutput">Connect via session start.</pre>
-          </div>
+          </section>
+
+          <section class="card info-card">
+            <div class="tabs">
+              <button class="tab active" data-tab-target="moves">Moves</button>
+              <button class="tab" data-tab-target="events">Event Log</button>
+              <button class="tab" data-tab-target="analytics">Analytics</button>
+            </div>
+            <div class="tab-panels">
+              <div class="pane active" data-tab-panel="moves">
+                <ol id="moveList"></ol>
+              </div>
+              <div class="pane" data-tab-panel="events">
+                <pre id="eventLog"></pre>
+              </div>
+              <div class="pane" data-tab-panel="analytics">
+                <div class="analytics-header">
+                  <h3>Session Analytics</h3>
+                  <button type="button" id="refreshAnalyticsBtn">Refresh</button>
+                </div>
+                <div id="analyticsSummary" class="analytics-summary">Start a session to view analytics.</div>
+                <ol id="analyticsEvents"></ol>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
-
-      <section class="move-list">
-        <h2>Moves</h2>
-        <ol id="moveList"></ol>
-      </section>
-
-      <section class="logs">
-        <h2>Event Log</h2>
-        <pre id="eventLog"></pre>
-      </section>
-
-      <section class="analytics">
-        <div class="panel">
-          <div class="panel-header">
-            <h2>Session Analytics</h2>
-            <button type="button" id="refreshAnalyticsBtn">Refresh</button>
-          </div>
-          <div id="analyticsSummary" class="analytics-summary">Start a session to view analytics.</div>
-          <ol id="analyticsEvents"></ol>
-        </div>
-      </section>
+      </main>
     </div>
 
     <script type="module" src="./app.js"></script>

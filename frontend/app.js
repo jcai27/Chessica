@@ -78,6 +78,22 @@ function isPlayersTurn() {
   return state.chess.turn() === desired;
 }
 
+function initTabs() {
+  const container = document.querySelector(".info-card");
+  if (!container) return;
+  const buttons = container.querySelectorAll("[data-tab-target]");
+  const panels = container.querySelectorAll("[data-tab-panel]");
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.tabTarget;
+      buttons.forEach((btn) => btn.classList.toggle("active", btn === button));
+      panels.forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.tabPanel === target);
+      });
+    });
+  });
+}
+
 async function createSession(payload) {
   const res = await fetch(`${API_BASE}/sessions`, {
     method: "POST",
@@ -276,6 +292,8 @@ function connectStream() {
     refs.streamOutput.textContent = "Stream closed.";
   };
 }
+
+initTabs();
 
 document.getElementById("sessionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
