@@ -11,6 +11,7 @@ from .. import engine
 from ..schemas import (
     ClockState,
     Explanation,
+    MoveInsight,
     MoveRequest,
     MoveResponse,
     SessionCreateRequest,
@@ -72,6 +73,9 @@ async def make_move(
     clocks = ClockState.model_validate(payload.clock.model_dump())
     player_turn = "w" if record.player_color == "white" else "b"
     engine_turn = "w" if record.engine_color == "white" else "b"
+    player_move_snapshot: chess.Board | None = None
+    player_move_after: chess.Board | None = None
+    player_move_obj: chess.Move | None = None
 
     if payload.uci:
         if board.active_color != player_turn:
@@ -79,19 +83,33 @@ async def make_move(
         legal_moves = board.legal_moves()
         if payload.uci not in legal_moves:
             raise HTTPException(status_code=400, detail="Illegal move.")
+        player_move_obj = chess.Move.from_uci(payload.uci)
+        player_move_snapshot = board.raw.copy()
         board.apply_uci(payload.uci)
-        record.moves.append(payload.uci)
-        log_event(
-            session_id,
-            "player_move",
-            {
-                "uci": payload.uci,
-                "clocks": clocks.model_dump(),
-                "move_index": len(record.moves),
-            },
-        )
+        player_move_after = board.raw.copy()
 
         if board.raw.is_checkmate() or board.raw.is_stalemate():
+            eval_cp = engine.CHECKMATE_CP if record.player_color == "white" else -engine.CHECKMATE_CP
+            if board.raw.is_stalemate():
+                eval_cp = 0
+            if player_move_snapshot and player_move_after and player_move_obj:
+                insight = engine.build_move_insight(
+                    player_move_snapshot,
+                    player_move_after,
+                    player_move_obj,
+                    chess.WHITE if record.player_color == "white" else chess.BLACK,
+                    "player",
+                    record.last_eval_cp,
+                    eval_cp,
+                    len(record.move_log) + 1,
+                )
+                record.move_log.append(insight)
+                record.last_eval_cp = eval_cp
+                log_event(
+                    session_id,
+                    "player_move",
+                    {**insight, "clocks": clocks.model_dump()},
+                )
             record.status = "completed"
             record.fen = board.to_fen()
             record.clocks = clocks
@@ -138,12 +156,45 @@ async def make_move(
     except ValueError:
         raise HTTPException(status_code=410, detail="Engine has no legal moves (game over).") from None
 
+    player_insight_dict: dict[str, object] | None = None
+    if player_move_snapshot and player_move_after and player_move_obj:
+        player_insight_dict = engine.build_move_insight(
+            player_move_snapshot,
+            player_move_after,
+            player_move_obj,
+            chess.WHITE if record.player_color == "white" else chess.BLACK,
+            "player",
+            record.last_eval_cp,
+            eval_cp,
+            len(record.move_log) + 1,
+        )
+        record.move_log.append(player_insight_dict)
+        record.last_eval_cp = eval_cp
+        log_event(
+            session_id,
+            "player_move",
+            {**player_insight_dict, "clocks": clocks.model_dump()},
+        )
+
     explanation = engine.explain_engine_move(
-        board_before_engine_move, engine_move, eval_cp, record.engine_color
+        board_before_engine_move, engine_move, eval_cp, record.engine_color, (player_insight_dict or {}).get("commentary")
     )
 
     board.apply_uci(engine_move)
-    record.moves.append(engine_move)
+    post_engine_eval = engine.evaluate_position(board, record.difficulty, record.engine_rating)
+    engine_move_obj = chess.Move.from_uci(engine_move)
+    engine_insight = engine.build_move_insight(
+        board_before_engine_move.raw,
+        board.raw.copy(),
+        engine_move_obj,
+        chess.WHITE if record.engine_color == "white" else chess.BLACK,
+        "engine",
+        eval_cp,
+        post_engine_eval,
+        len(record.move_log) + 1,
+    )
+    record.move_log.append(engine_insight)
+    record.last_eval_cp = post_engine_eval
 
     profile = engine.mock_opponent_profile()
     record.opponent_profile = profile
@@ -162,6 +213,7 @@ async def make_move(
         opponent_profile=profile,
         explanation=explanation,
         game_state=game_state,
+        latest_insight=MoveInsight.model_validate(player_insight_dict) if player_insight_dict else None,
     )
 
     if board.raw.is_checkmate() or board.raw.is_stalemate():
@@ -198,6 +250,7 @@ async def make_move(
         "difficulty": record.difficulty,
         "engine_depth": record.engine_depth,
         "engine_rating": record.engine_rating,
+        "history_entry": engine_insight,
     }
 
     await stream_manager.broadcast(

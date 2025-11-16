@@ -16,6 +16,7 @@ from .config import settings
 from .schemas import (
     ClockState,
     DifficultyLevel,
+    MoveInsight,
     OpponentProfile,
     OpponentStyle,
     SessionCreateRequest,
@@ -75,7 +76,7 @@ class SessionRecord:
     updated_at: datetime
     fen: str
     clocks: ClockState
-    moves: List[str] = field(default_factory=list)
+    move_log: List[Dict[str, Any]] = field(default_factory=list)
     opponent_profile: OpponentProfile = field(
         default_factory=lambda: OpponentProfile(
             style=OpponentStyle(tactical=0.5, risk=0.5),
@@ -87,6 +88,7 @@ class SessionRecord:
     difficulty: DifficultyLevel = field(
         default_factory=lambda: DEPTH_TO_PRESET.get(settings.engine_default_depth, DIFFICULTY_PRESETS[2])["name"]
     )
+    last_eval_cp: int = 0
 
     def to_response(self) -> SessionResponse:
         return SessionResponse(
@@ -103,11 +105,18 @@ class SessionRecord:
         )
 
     def to_detail(self) -> SessionDetail:
+        simple_moves = [entry.get("uci", "") for entry in self.move_log]
+        history_models: list[MoveInsight] = []
+        for entry in self.move_log:
+            if not entry.get("uci") or "verdict" not in entry:
+                continue
+            history_models.append(MoveInsight.model_validate(entry))
         return SessionDetail(
             **self.to_response().model_dump(),
             fen=self.fen,
             clocks=self.clocks,
-            moves=self.moves,
+            moves=simple_moves,
+            history=history_models,
             opponent_profile=self.opponent_profile,
         )
 
@@ -122,11 +131,12 @@ class SessionRecord:
             "updated_at": self.updated_at.isoformat(),
             "fen": self.fen,
             "clocks": self.clocks.model_dump(),
-            "moves": self.moves,
+            "moves": self.move_log,
             "opponent_profile": self.opponent_profile.model_dump(),
             "engine_depth": self.engine_depth,
             "engine_rating": self.engine_rating,
             "difficulty": self.difficulty,
+            "last_eval_cp": self.last_eval_cp,
         }
 
     @classmethod
@@ -141,15 +151,22 @@ class SessionRecord:
             updated_at=datetime.fromisoformat(payload["updated_at"]),
             fen=payload["fen"],
             clocks=ClockState.model_validate(payload["clocks"]),
-            moves=list(payload.get("moves", [])),
+            move_log=_normalize_moves(payload.get("moves", [])),
             opponent_profile=OpponentProfile.model_validate(payload["opponent_profile"]),
             engine_depth=payload.get("engine_depth", settings.engine_default_depth),
             engine_rating=payload.get("engine_rating", depth_to_rating(settings.engine_default_depth)),
             difficulty=payload.get("difficulty", "advanced"),
+            last_eval_cp=payload.get("last_eval_cp", 0),
         )
 
     @classmethod
     def from_model(cls, model: SessionModel) -> "SessionRecord":
+        move_log = _normalize_moves(model.moves or [])
+        last_eval = 0
+        for entry in reversed(move_log):
+            if isinstance(entry, dict) and "eval_cp" in entry:
+                last_eval = entry.get("eval_cp", 0)
+                break
         return cls(
             session_id=model.session_id,
             player_color=model.player_color,
@@ -160,12 +177,29 @@ class SessionRecord:
             updated_at=model.updated_at,
             fen=model.fen,
             clocks=ClockState(player_ms=model.clock_player_ms, engine_ms=model.clock_engine_ms),
-            moves=list(model.moves or []),
+            move_log=move_log,
             opponent_profile=OpponentProfile.model_validate(model.opponent_profile),
             engine_depth=model.engine_depth,
             engine_rating=model.engine_rating,
             difficulty=model.difficulty or "custom",
+            last_eval_cp=last_eval,
         )
+
+    @property
+    def moves(self) -> List[str]:
+        return [entry.get("uci", "") for entry in self.move_log]
+
+
+def _normalize_moves(raw_moves: Any) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    if not raw_moves:
+        return normalized
+    for item in raw_moves:
+        if isinstance(item, str):
+            normalized.append({"uci": item})
+        else:
+            normalized.append(dict(item))
+    return normalized
 
 
 class SessionRepository:
@@ -207,7 +241,7 @@ class SessionRepository:
                 fen=record.fen,
                 clock_player_ms=record.clocks.player_ms,
                 clock_engine_ms=record.clocks.engine_ms,
-                moves=list(record.moves),
+                moves=list(record.move_log),
                 opponent_profile=record.opponent_profile.model_dump(),
                 created_at=record.created_at,
                 updated_at=record.updated_at,
@@ -239,7 +273,7 @@ class SessionRepository:
             model.fen = record.fen
             model.clock_player_ms = record.clocks.player_ms
             model.clock_engine_ms = record.clocks.engine_ms
-            model.moves = list(record.moves)
+            model.moves = list(record.move_log)
             model.opponent_profile = record.opponent_profile.model_dump()
             model.engine_depth = record.engine_depth
             model.engine_rating = record.engine_rating

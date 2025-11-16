@@ -68,6 +68,19 @@ class Explanation(BaseModel):
     alt_eval_cp: int
 
 
+class MoveInsight(BaseModel):
+    ply: int
+    side: Literal["player", "engine"]
+    uci: str
+    san: str
+    eval_cp: int
+    delta_cp: int
+    verdict: Literal["brilliant", "great", "good", "inaccuracy", "mistake", "blunder", "sharp"]
+    commentary: str
+    themes: list[str] = []
+    timestamp: datetime
+
+
 class GameState(BaseModel):
     fen: str
     move_number: int
@@ -83,6 +96,7 @@ class MoveResponse(BaseModel):
     game_state: GameState
     result: Literal["checkmate", "stalemate", "resigned"] | None = None
     winner: Literal["player", "engine", "draw"] | None = None
+    latest_insight: MoveInsight | None = None
     message: str | None = None
 
 
@@ -90,6 +104,7 @@ class SessionDetail(SessionResponse):
     fen: str
     clocks: ClockState
     moves: list[str]
+    history: list[MoveInsight] = []
     opponent_profile: OpponentProfile
 
 

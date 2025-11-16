@@ -189,11 +189,23 @@ function resetInsights(message = "No moves yet.") {
 function updateInsightFromResponse(response) {
   if (!response || !refs.insightSummary) return;
   refs.insightSummary.textContent = response.explanation.summary;
+  const latestInsight = response.latest_insight;
+  const verdictBullet = latestInsight
+    ? `<li>Move verdict: ${capitalize(latestInsight.verdict)} (${formatEval(latestInsight.delta_cp)})</li>`
+    : "";
+  const commentaryBullet = latestInsight ? `<li>${latestInsight.commentary}</li>` : "";
+  const themeBullet =
+    latestInsight && latestInsight.themes?.length
+      ? `<li>Triggered themes: ${latestInsight.themes.join(", ")}</li>`
+      : "";
   if (refs.insightDetails) {
     refs.insightDetails.innerHTML = `
       <li>Objective cost: ${response.explanation.objective_cost_cp} cp</li>
       <li>Alt best move: ${response.explanation.alt_best_move} (${formatEval(response.explanation.alt_eval_cp)})</li>
       <li>Exploit confidence: ${(response.exploit_confidence * 100).toFixed(1)}%</li>
+      ${verdictBullet}
+      ${commentaryBullet}
+      ${themeBullet}
     `;
   }
   if (refs.evalScore) {

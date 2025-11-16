@@ -21,18 +21,21 @@ def get_analysis(
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found") from None
 
-    moves = [
-        AnalysisMove(
-            ply=index + 1,
-            player_move=move,
-            engine_reply="c5d4",
-            objective_eval_cp=-34 + index,
-            exploit_gain_cp=20 + index,
-            motifs=["fork pressure", "time squeeze"],
-            explanation="Steers into motifs aligned with recent opponent errors.",
+    recent = record.move_log[-3:]
+    moves = []
+    for index, entry in enumerate(recent):
+        uci = entry.get("uci", f"move_{index}")
+        moves.append(
+            AnalysisMove(
+                ply=len(record.move_log) - len(recent) + index + 1,
+                player_move=uci,
+                engine_reply=entry.get("uci", "—"),
+                objective_eval_cp=entry.get("eval_cp", 0),
+                exploit_gain_cp=entry.get("delta_cp", 0),
+                motifs=entry.get("themes", ["strategic motif"]),
+                explanation=entry.get("commentary", "A thematic continuation."),
+            )
         )
-        for index, move in enumerate(record.moves[-3:])
-    ]
 
     summary = AnalysisSummary(
         induced_blunders=len(moves) // 2,

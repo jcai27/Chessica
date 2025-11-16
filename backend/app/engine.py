@@ -6,6 +6,7 @@ import atexit
 import os
 import shlex
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import chess
@@ -134,7 +135,9 @@ def mock_exploit_confidence() -> float:
     return round(0.4 + random() * 0.5, 2)
 
 
-def explain_engine_move(board: Board, move_uci: str, eval_cp: int, engine_color: str) -> "Explanation":
+def explain_engine_move(
+    board: Board, move_uci: str, eval_cp: int, engine_color: str, player_feedback: str | None = None
+) -> "Explanation":
     from .schemas import Explanation
 
     move = chess.Move.from_uci(move_uci)
@@ -144,7 +147,7 @@ def explain_engine_move(board: Board, move_uci: str, eval_cp: int, engine_color:
     mover_color = snapshot.turn
     analysis_board = snapshot.copy()
     analysis_board.push(move)
-    summary = _summarize_move(snapshot, analysis_board, move, mover_color, engine_color, eval_cp)
+    summary = _position_briefing(analysis_board, eval_cp, engine_color, mover_color, player_feedback)
     return Explanation(
         summary=summary,
         objective_cost_cp=0,
@@ -162,91 +165,303 @@ _PIECE_VALUES = {
     chess.KING: 20000,
 }
 
+_EXTENDED_CENTER_SQUARES = [
+    chess.C3,
+    chess.D3,
+    chess.E3,
+    chess.F3,
+    chess.C4,
+    chess.D4,
+    chess.E4,
+    chess.F4,
+    chess.C5,
+    chess.D5,
+    chess.E5,
+    chess.F5,
+    chess.C6,
+    chess.D6,
+    chess.E6,
+    chess.F6,
+]
 
-def _summarize_move(
+THEME_LABELS = {
+    "king_safety": "king safety",
+    "central_control": "central control",
+    "material_gain": "material play",
+    "piece_activity": "piece activity",
+    "king_attack": "king attack",
+    "space_gain": "space advantage",
+    "passed_pawn": "passed pawn",
+    "simplification": "simplification",
+}
+
+THEME_TIPS = {
+    "king_safety": "Keep building around the king and tie your rooks together.",
+    "central_control": "Dominating the center reduces your opponent's counterplay.",
+    "material_gain": "With material in hand, exchange into favorable endings.",
+    "piece_activity": "Improve the least active piece so everything coordinates.",
+    "king_attack": "Keep pieces flowing toward the king and watch for tactical shots.",
+    "space_gain": "Fix the space edge by restricting pawn breaks.",
+    "passed_pawn": "Put rooks behind the passer and march it confidently.",
+    "simplification": "Trade toward a structure your side prefers.",
+}
+
+
+def evaluate_position(board: Board, difficulty: str, engine_rating: int) -> int:
+    profile = _difficulty_profile(difficulty, engine_rating)
+    think_time = max(0.05, min(settings.engine_move_time_limit, float(profile["move_time"])))
+    limit = chess.engine.Limit(time=think_time)
+    with ENGINE_LOCK:
+        engine = _get_engine()
+        try:
+            engine.configure(
+                {
+                    "Skill Level": max(0, min(20, int(profile.get("skill", 15)))),
+                    "UCI_LimitStrength": True,
+                    "UCI_Elo": max(600, min(2850, int(profile["elo"]))),
+                }
+            )
+        except chess.engine.EngineTerminatedError:
+            _shutdown_engine()
+            engine = _get_engine()
+        info = engine.analyse(board.raw, limit, info=chess.engine.INFO_SCORE)
+    return _score_to_cp(info.get("score"))
+
+
+def build_move_insight(
     before: chess.Board,
     after: chess.Board,
     move: chess.Move,
     mover_color: chess.Color,
-    engine_color: str,
-    eval_cp: int,
-) -> str:
-    parts: list[str] = []
-    parts.append(_primary_action_sentence(before, after, move, mover_color))
-    theme = _theme_sentence(before, after, move, mover_color)
-    if theme:
-        parts.append(theme)
-    parts.extend(_follow_up_sentences(after, move, mover_color))
-    score_blurb = _score_sentence(eval_cp, engine_color)
-    if score_blurb:
-        parts.append(score_blurb)
-    return " ".join(part for part in parts if part).strip()
+    side: str,
+    prev_eval_cp: int,
+    new_eval_cp: int,
+    ply_index: int,
+) -> dict[str, object]:
+    san = before.san(move)
+    delta_cp = new_eval_cp - prev_eval_cp
+    if mover_color == chess.BLACK:
+        delta_cp = -delta_cp
+    verdict = _classify_delta(delta_cp)
+    themes = _themes_for_move(before, after, move, mover_color)
+    commentary = _compose_commentary(side, verdict, delta_cp, themes)
+    return {
+        "ply": ply_index,
+        "side": side,
+        "uci": move.uci(),
+        "san": san,
+        "eval_cp": new_eval_cp,
+        "delta_cp": delta_cp,
+        "verdict": verdict,
+        "commentary": commentary,
+        "themes": themes,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
-def _primary_action_sentence(
-    before: chess.Board, after: chess.Board, move: chess.Move, mover_color: chess.Color
-) -> str:
-    piece_type = before.piece_type_at(move.from_square)
-    piece_name = chess.piece_name(piece_type or chess.PAWN)
-    destination = chess.square_name(move.to_square)
-    if before.is_castling(move):
-        side = "kingside" if chess.square_file(move.to_square) > chess.square_file(move.from_square) else "queenside"
-        return f"Castles {side} to tuck the king away and mobilize the rook."
-    if move.promotion:
-        promo_name = chess.piece_name(move.promotion)
-        return f"Promotes the pawn on {destination} into a {promo_name}, adding a fresh attacker."
-    if before.is_capture(move):
-        target_square = move.to_square
-        target_piece = before.piece_type_at(move.to_square)
-        if target_piece is None and before.is_en_passant(move):
-            offset = -8 if mover_color == chess.WHITE else 8
-            target_square = move.to_square + offset
-            target_piece = chess.PAWN
-        captured = chess.piece_name(target_piece or chess.PAWN)
-        return f"{piece_name.title()} captures your {captured} on {chess.square_name(target_square)}."
-    if piece_type == chess.PAWN:
-        text = f"Advances the pawn to {destination}"
-    elif piece_type in (chess.KNIGHT, chess.BISHOP, chess.QUEEN) and _is_strong_center(move.to_square):
-        text = f"Centralizes the {piece_name} on {destination}"
+def _themes_for_move(before: chess.Board, after: chess.Board, move: chess.Move, mover_color: chess.Color) -> list[str]:
+    detected = _detect_themes(before, after, move, mover_color)
+    labeled = [THEME_LABELS.get(theme, theme.replace("_", " ")) for theme in detected]
+    return labeled
+
+
+def _classify_delta(delta_cp: int) -> str:
+    if delta_cp >= 150:
+        return "brilliant"
+    if delta_cp >= 80:
+        return "great"
+    if delta_cp >= 30:
+        return "good"
+    if delta_cp <= -150:
+        return "blunder"
+    if delta_cp <= -80:
+        return "mistake"
+    if delta_cp <= -30:
+        return "inaccuracy"
+    return "sharp"
+
+
+def _compose_commentary(side: str, verdict: str, delta_cp: int, themes: list[str]) -> str:
+    actor = "You" if side == "player" else "The engine"
+    swing = f"{abs(delta_cp) / 100:.2f}"
+    if verdict in {"brilliant", "great"}:
+        prefix = f"{actor} found a {verdict} idea"
+    elif verdict in {"good", "sharp"}:
+        prefix = f"{actor} keeps the plan healthy"
+    elif verdict == "inaccuracy":
+        prefix = f"{actor} slipped slightly"
+    elif verdict == "mistake":
+        prefix = f"{actor} let the evaluation drift"
     else:
-        text = f"Repositions the {piece_name} to {destination}"
-    if piece_type == chess.ROOK and _file_is_open(after, move.to_square):
-        text += " to seize the open file"
-    return f"{text}."
+        prefix = f"{actor} blundered"
+    theme_hint = THEME_TIPS.get(_reverse_theme_lookup(themes), "")
+    impact = f"shifting the eval by {swing} pawns."
+    return " ".join(part for part in (prefix + ",", theme_hint or "", impact) if part).strip()
 
 
-def _follow_up_sentences(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> list[str]:
-    details: list[str] = []
-    if after.is_checkmate():
-        details.append("The move delivers checkmate.")
-        return details
-    if after.is_check():
-        details.append("It also checks your king.")
-    threat = _threat_sentence(after, move, mover_color)
-    if threat:
-        details.append(threat)
-    if _creates_passed_pawn(after, move, mover_color):
-        details.append("The pawn is now passed and can become a long-term asset.")
-    if _aligns_with_king(after, move, mover_color):
-        details.append("The move lines up directly with your king, increasing pressure.")
-    return details
+def _reverse_theme_lookup(themes: list[str]) -> str:
+    reverse = {value: key for key, value in THEME_LABELS.items()}
+    for theme in themes:
+        key = reverse.get(theme)
+        if key:
+            return key
+    return ""
 
 
-def _threat_sentence(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> str:
-    targets: list[tuple[int, chess.Piece, int]] = []
-    for square in after.attacks(move.to_square):
-        piece = after.piece_at(square)
-        if piece and piece.color != mover_color:
-            value = _PIECE_VALUES.get(piece.piece_type, 0)
-            targets.append((value, piece, square))
-    if not targets:
+def _position_briefing(
+    board: chess.Board,
+    eval_cp: int,
+    engine_color: str,
+    mover_color: chess.Color,
+    player_feedback: str | None = None,
+) -> str:
+    statements = [
+        _material_brief(board),
+        _center_control_brief(board),
+        _space_activity_brief(board, mover_color),
+        _king_safety_brief(board),
+        _structural_brief(board),
+        _score_sentence(eval_cp, engine_color),
+    ]
+    if player_feedback:
+        statements.insert(0, player_feedback)
+    return " ".join(part for part in statements if part).strip()
+
+
+def _material_brief(board: chess.Board) -> str:
+    totals = _material_totals(board)
+    diff = totals[chess.WHITE] - totals[chess.BLACK]
+    if abs(diff) < 80:
+        return "Material is level, so plans revolve around piece activity and pawn structure."
+    pawns = abs(diff) / 100
+    formatted = f"{pawns:.1f}".rstrip('0').rstrip('.')
+    leader = "White" if diff > 0 else "Black"
+    return f"{leader} holds roughly a {formatted}-pawn material edge, letting that side dictate the trades."
+
+
+def _material_totals(board: chess.Board) -> dict[chess.Color, int]:
+    totals = {chess.WHITE: 0, chess.BLACK: 0}
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if not piece:
+            continue
+        totals[piece.color] += _PIECE_VALUES.get(piece.piece_type, 0)
+    return totals
+
+
+def _center_control_brief(board: chess.Board) -> str:
+    counts = {chess.WHITE: 0, chess.BLACK: 0}
+    for square in _EXTENDED_CENTER_SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            counts[piece.color] += 1
+    diff = counts[chess.WHITE] - counts[chess.BLACK]
+    if diff > 1:
+        return "White pieces dominate the central squares, limiting counterplay."
+    if diff < -1:
+        return "Black has seized the central dark squares, so White must look for flanks."
+    return "Central control is shared, making timing and move order critical."
+
+
+def _space_activity_brief(board: chess.Board, mover_color: chess.Color) -> str:
+    advanced = _advanced_piece_counts(board)
+    opponent = chess.BLACK if mover_color == chess.WHITE else chess.WHITE
+    difference = advanced[mover_color] - advanced[opponent]
+    mover_name = _color_name(mover_color)
+    if difference >= 2:
+        return f"{mover_name} pieces are planted deep in enemy territory, so keep pressing the space advantage."
+    if difference <= -2:
+        opponent_name = _color_name(opponent)
+        return f"{opponent_name} has the more active army right now; tighten your coordination before counterattacking."
+    return f"Piece activity is balanced, so {mover_name} should improve the worst-placed piece before launching tactics."
+
+
+def _advanced_piece_counts(board: chess.Board) -> dict[chess.Color, int]:
+    counts = {chess.WHITE: 0, chess.BLACK: 0}
+    for square, piece in board.piece_map().items():
+        if piece.piece_type == chess.KING:
+            continue
+        rank = chess.square_rank(square)
+        if piece.color == chess.WHITE and rank >= 4:
+            counts[chess.WHITE] += 1
+        elif piece.color == chess.BLACK and rank <= 3:
+            counts[chess.BLACK] += 1
+    return counts
+
+
+def _king_safety_brief(board: chess.Board) -> str:
+    white = _king_safety_status(board, chess.WHITE)
+    black = _king_safety_status(board, chess.BLACK)
+    return f"{white} {black}".strip()
+
+
+def _king_safety_status(board: chess.Board, color: chess.Color) -> str:
+    king_square = board.king(color)
+    if king_square is None:
         return ""
-    _, piece, square = max(targets, key=lambda item: item[0])
-    name = chess.piece_name(piece.piece_type)
-    square_name = chess.square_name(square)
-    if piece.piece_type == chess.KING:
-        return "It forces your king to stay alert to new threats."
-    return f"It now threatens your {name} on {square_name}."
+    name = _color_name(color)
+    rank = chess.square_rank(king_square)
+    file = chess.square_file(king_square)
+    if color == chess.WHITE:
+        if rank == 0 and file >= 5:
+            return f"{name}'s king is tucked on the kingside, so the rook can join quickly."
+        if rank == 0 and file <= 2:
+            return f"{name}'s king has gone queenside; activate rooks toward the center."
+    else:
+        if rank == 7 and file >= 5:
+            return f"{name}'s king mirrors that safety on g8, making direct attacks harder."
+        if rank == 7 and file <= 2:
+            return f"{name} committed to a long castle, so watch the a- and b-files."
+    return f"{name}'s king still lingers in the center, so development with tempo is vital."
+
+
+def _structural_brief(board: chess.Board) -> str:
+    blurbs: list[str] = []
+    if _has_bishop_pair(board, chess.WHITE) and not _has_bishop_pair(board, chess.BLACK):
+        blurbs.append("White enjoys the bishop pair, which favors open play.")
+    elif _has_bishop_pair(board, chess.BLACK) and not _has_bishop_pair(board, chess.WHITE):
+        blurbs.append("Black keeps the bishops, so look to steer the game open.")
+    white_passed = _passed_pawns(board, chess.WHITE)
+    black_passed = _passed_pawns(board, chess.BLACK)
+    if white_passed and not black_passed:
+        files = ", ".join(chess.square_name(sq) for sq in white_passed)
+        blurbs.append(f"White owns a passed pawn on {files}; shepherd it forward with rook support.")
+    elif black_passed and not white_passed:
+        files = ", ".join(chess.square_name(sq) for sq in black_passed)
+        blurbs.append(f"Black's passed pawn on {files} is the long-term trump to watch.")
+    if not blurbs:
+        return ""
+    return " ".join(blurbs)
+
+
+def _has_bishop_pair(board: chess.Board, color: chess.Color) -> bool:
+    return len(board.pieces(chess.BISHOP, color)) >= 2
+
+
+def _passed_pawns(board: chess.Board, color: chess.Color) -> list[chess.Square]:
+    squares: list[chess.Square] = []
+    for square in board.pieces(chess.PAWN, color):
+        if _pawn_is_passed(board, square, color):
+            squares.append(square)
+    return squares
+
+
+def _pawn_is_passed(board: chess.Board, square: chess.Square, color: chess.Color) -> bool:
+    enemy = chess.BLACK if color == chess.WHITE else chess.WHITE
+    file_idx = chess.square_file(square)
+    rank_idx = chess.square_rank(square)
+    direction = 1 if color == chess.WHITE else -1
+    next_rank = rank_idx + direction
+    while 0 <= next_rank < 8:
+        for adj_file in (file_idx - 1, file_idx, file_idx + 1):
+            if not (0 <= adj_file < 8):
+                continue
+            target_square = chess.square(adj_file, next_rank)
+            target_piece = board.piece_at(target_square)
+            if target_piece and target_piece.color == enemy and target_piece.piece_type == chess.PAWN:
+                return False
+        next_rank += direction
+    return True
 
 
 def _score_sentence(eval_cp: int, engine_color: str) -> str:
@@ -254,132 +469,11 @@ def _score_sentence(eval_cp: int, engine_color: str) -> str:
     if abs(perspective) < 40:
         return "Engine evaluation keeps the position roughly level."
     pawns = abs(perspective) / 100
-    formatted = f"{pawns:.2f}".rstrip("0").rstrip(".")
+    formatted = f"{pawns:.2f}".rstrip('0').rstrip('.')
     if perspective > 0:
         return f"The engine sees itself ahead by about {formatted} pawns."
     return f"The engine still trails by roughly {formatted} pawns."
 
 
-def _is_strong_center(square: chess.Square) -> bool:
-    file_idx = chess.square_file(square)
-    rank_idx = chess.square_rank(square)
-    return 2 <= file_idx <= 5 and 2 <= rank_idx <= 5
-
-
-def _file_is_open(board: chess.Board, square: chess.Square) -> bool:
-    file_idx = chess.square_file(square)
-    for rank in range(8):
-        sq = chess.square(file_idx, rank)
-        piece = board.piece_at(sq)
-        if piece and piece.piece_type == chess.PAWN:
-            return False
-    return True
-
-
-def _creates_passed_pawn(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
-    piece = after.piece_at(move.to_square)
-    if not piece or piece.piece_type != chess.PAWN:
-        return False
-    enemy = chess.BLACK if mover_color == chess.WHITE else chess.WHITE
-    file_idx = chess.square_file(move.to_square)
-    rank_idx = chess.square_rank(move.to_square)
-    direction = 1 if mover_color == chess.WHITE else -1
-    next_rank = rank_idx + direction
-    while 0 <= next_rank < 8:
-        for adj_file in (file_idx - 1, file_idx, file_idx + 1):
-            if not (0 <= adj_file < 8):
-                continue
-            sq = chess.square(adj_file, next_rank)
-            target = after.piece_at(sq)
-            if target and target.color == enemy and target.piece_type == chess.PAWN:
-                return False
-        next_rank += direction
-    return True
-
-
-def _aligns_with_king(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
-    slider = after.piece_at(move.to_square)
-    if not slider or slider.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
-        return False
-    enemy_king = after.king(chess.BLACK if mover_color == chess.WHITE else chess.WHITE)
-    if enemy_king is None:
-        return False
-    between_mask = chess.between(enemy_king, move.to_square)
-    if between_mask == 0:
-        return False
-    for sq in chess.SquareSet(between_mask):
-        if after.piece_at(sq):
-            return False
-    return True
-
-
-def _theme_sentence(
-    before: chess.Board,
-    after: chess.Board,
-    move: chess.Move,
-    mover_color: chess.Color,
-) -> str:
-    themes = _detect_themes(before, after, move, mover_color)
-    if not themes:
-        return ""
-    THEME_DESCRIPTIONS = {
-        "king_safety": "Prioritizes king safety so the attack can continue from a stable base.",
-        "central_control": "Strengthens central control to choke your counterplay.",
-        "material_gain": "Keeps the plan pragmatic by banking material.",
-        "piece_activity": "Builds piece activity to improve future coordination.",
-        "king_attack": "Feeds into the broader attack on your king.",
-        "space_gain": "Claims extra space to squeeze your position.",
-        "passed_pawn": "Commits to a long-term plan of advancing the passed pawn.",
-        "simplification": "Steers toward a simplified position that favors the engine's structure.",
-    }
-    ordered = [desc for key, desc in THEME_DESCRIPTIONS.items() if key in themes]
-    return ordered[0] if ordered else ""
-
-
-def _detect_themes(
-    before: chess.Board,
-    after: chess.Board,
-    move: chess.Move,
-    mover_color: chess.Color,
-) -> set[str]:
-    themes: set[str] = set()
-    piece_type = before.piece_type_at(move.from_square) or chess.PAWN
-    destination = move.to_square
-    if before.is_castling(move) or piece_type == chess.KING:
-        themes.add("king_safety")
-    if piece_type == chess.PAWN and _is_center_square(destination):
-        themes.add("central_control")
-    if piece_type in (chess.KNIGHT, chess.BISHOP, chess.QUEEN) and _is_strong_center(destination):
-        themes.add("central_control")
-        themes.add("piece_activity")
-    if piece_type == chess.ROOK and _file_is_open(after, destination):
-        themes.add("piece_activity")
-    if before.is_capture(move):
-        themes.add("material_gain")
-        if before.piece_type_at(move.from_square) == before.piece_type_at(move.to_square):
-            themes.add("simplification")
-    if after.is_check() or _aligns_with_king(after, move, mover_color):
-        themes.add("king_attack")
-    if _creates_passed_pawn(after, move, mover_color):
-        themes.add("passed_pawn")
-    if piece_type == chess.PAWN and _pushes_space(move, mover_color):
-        themes.add("space_gain")
-    if piece_type in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN) and _advanced_piece_placement(
-        destination, mover_color
-    ):
-        themes.add("piece_activity")
-    return themes
-
-
-def _is_center_square(square: chess.Square) -> bool:
-    return chess.square_file(square) in (2, 3, 4, 5) and chess.square_rank(square) in (2, 3, 4, 5)
-
-
-def _pushes_space(move: chess.Move, mover_color: chess.Color) -> bool:
-    rank = chess.square_rank(move.to_square)
-    return rank >= 4 if mover_color == chess.WHITE else rank <= 3
-
-
-def _advanced_piece_placement(square: chess.Square, mover_color: chess.Color) -> bool:
-    rank = chess.square_rank(square)
-    return rank >= 4 if mover_color == chess.WHITE else rank <= 3
+def _color_name(color: chess.Color) -> str:
+    return "White" if color == chess.WHITE else "Black"
