@@ -477,3 +477,91 @@ def _score_sentence(eval_cp: int, engine_color: str) -> str:
 
 def _color_name(color: chess.Color) -> str:
     return "White" if color == chess.WHITE else "Black"
+
+
+def _detect_themes(
+    before: chess.Board,
+    after: chess.Board,
+    move: chess.Move,
+    mover_color: chess.Color,
+) -> set[str]:
+    themes: set[str] = set()
+    piece_type = before.piece_type_at(move.from_square) or chess.PAWN
+    destination = move.to_square
+    if before.is_castling(move) or piece_type == chess.KING:
+        themes.add("king_safety")
+    if piece_type == chess.PAWN and _is_center_square(destination):
+        themes.add("central_control")
+    if piece_type in (chess.KNIGHT, chess.BISHOP, chess.QUEEN) and _is_strong_center(destination):
+        themes.add("central_control")
+        themes.add("piece_activity")
+    if piece_type == chess.ROOK and _file_is_open(after, destination):
+        themes.add("piece_activity")
+    if before.is_capture(move):
+        themes.add("material_gain")
+        if before.piece_type_at(move.from_square) == before.piece_type_at(move.to_square):
+            themes.add("simplification")
+    if after.is_check() or _aligns_with_king(after, move, mover_color):
+        themes.add("king_attack")
+    if _creates_passed_pawn(after, move, mover_color):
+        themes.add("passed_pawn")
+    if piece_type == chess.PAWN and _pushes_space(move, mover_color):
+        themes.add("space_gain")
+    if piece_type in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN) and _advanced_piece_placement(
+        destination, mover_color
+    ):
+        themes.add("piece_activity")
+    return themes
+
+
+def _is_center_square(square: chess.Square) -> bool:
+    return chess.square_file(square) in (2, 3, 4, 5) and chess.square_rank(square) in (2, 3, 4, 5)
+
+
+def _is_strong_center(square: chess.Square) -> bool:
+    file_idx = chess.square_file(square)
+    rank_idx = chess.square_rank(square)
+    return 2 <= file_idx <= 5 and 2 <= rank_idx <= 5
+
+
+def _pushes_space(move: chess.Move, mover_color: chess.Color) -> bool:
+    rank = chess.square_rank(move.to_square)
+    return rank >= 4 if mover_color == chess.WHITE else rank <= 3
+
+
+def _advanced_piece_placement(square: chess.Square, mover_color: chess.Color) -> bool:
+    rank = chess.square_rank(square)
+    return rank >= 4 if mover_color == chess.WHITE else rank <= 3
+
+
+def _file_is_open(board: chess.Board, square: chess.Square) -> bool:
+    file_idx = chess.square_file(square)
+    for rank in range(8):
+        sq = chess.square(file_idx, rank)
+        piece = board.piece_at(sq)
+        if piece and piece.piece_type == chess.PAWN:
+            return False
+    return True
+
+
+def _creates_passed_pawn(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
+    piece = after.piece_at(move.to_square)
+    if not piece or piece.piece_type != chess.PAWN:
+        return False
+    return _pawn_is_passed(after, move.to_square, mover_color)
+
+
+def _aligns_with_king(after: chess.Board, move: chess.Move, mover_color: chess.Color) -> bool:
+    slider = after.piece_at(move.to_square)
+    if not slider or slider.piece_type not in (chess.BISHOP, chess.ROOK, chess.QUEEN):
+        return False
+    enemy_king = after.king(chess.BLACK if mover_color == chess.WHITE else chess.WHITE)
+    if enemy_king is None:
+        return False
+    between_mask = chess.between(enemy_king, move.to_square)
+    if between_mask == 0:
+        return False
+    for sq in chess.SquareSet(between_mask):
+        if after.piece_at(sq):
+            return False
+    return True
