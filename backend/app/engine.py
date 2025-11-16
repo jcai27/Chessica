@@ -283,20 +283,26 @@ def _classify_delta(delta_cp: int) -> str:
 
 def _compose_commentary(side: str, verdict: str, delta_cp: int, themes: list[str]) -> str:
     actor = "You" if side == "player" else "The engine"
-    swing = f"{abs(delta_cp) / 100:.2f}"
-    if verdict in {"brilliant", "great"}:
-        prefix = f"{actor} found a {verdict} idea"
-    elif verdict in {"good", "sharp"}:
-        prefix = f"{actor} keeps the plan healthy"
-    elif verdict == "inaccuracy":
-        prefix = f"{actor} slipped slightly"
-    elif verdict == "mistake":
-        prefix = f"{actor} let the evaluation drift"
-    else:
-        prefix = f"{actor} blundered"
+    verdict_text = {
+        "brilliant": "found a brilliant resource that elevates the plan.",
+        "great": "chose an ambitious continuation and kept tension high.",
+        "good": "followed the strategic blueprint.",
+        "sharp": "kept the position dynamic and resourceful.",
+        "inaccuracy": "lost a bit of the thread.",
+        "mistake": "gave the opponent clear targets.",
+        "blunder": "handed over the initiative.",
+    }.get(verdict, "made a practical choice.")
     theme_hint = THEME_TIPS.get(_reverse_theme_lookup(themes), "")
-    impact = f"shifting the eval by {swing} pawns."
-    return " ".join(part for part in (prefix + ",", theme_hint or "", impact) if part).strip()
+    reinforcement = {
+        "brilliant": "Keep pressing with the same motif.",
+        "great": "Anchor the gain by consolidating your pieces.",
+        "good": "Stay alert for tactical ripostes.",
+        "sharp": "Balance activity with king safety.",
+        "inaccuracy": "Breathe, reinforce your weak squares.",
+        "mistake": "Rebuild your coordination and limit further damage.",
+        "blunder": "Switch to damage control and hunt counterplay.",
+    }.get(verdict, "")
+    return " ".join(part for part in (f"{actor} {verdict_text}", theme_hint, reinforcement) if part).strip()
 
 
 def _reverse_theme_lookup(themes: list[str]) -> str:
@@ -321,7 +327,7 @@ def _position_briefing(
         _space_activity_brief(board, mover_color),
         _king_safety_brief(board),
         _structural_brief(board),
-        _score_sentence(eval_cp, engine_color),
+        _plan_prompt(board, mover_color),
     ]
     if player_feedback:
         statements.insert(0, player_feedback)
@@ -349,12 +355,17 @@ def _material_totals(board: chess.Board) -> dict[chess.Color, int]:
     return totals
 
 
-def _center_control_brief(board: chess.Board) -> str:
+def _center_control_counts(board: chess.Board) -> dict[chess.Color, int]:
     counts = {chess.WHITE: 0, chess.BLACK: 0}
     for square in _EXTENDED_CENTER_SQUARES:
         piece = board.piece_at(square)
         if piece:
             counts[piece.color] += 1
+    return counts
+
+
+def _center_control_brief(board: chess.Board) -> str:
+    counts = _center_control_counts(board)
     diff = counts[chess.WHITE] - counts[chess.BLACK]
     if diff > 1:
         return "White pieces dominate the central squares, limiting counterplay."
@@ -464,19 +475,40 @@ def _pawn_is_passed(board: chess.Board, square: chess.Square, color: chess.Color
     return True
 
 
-def _score_sentence(eval_cp: int, engine_color: str) -> str:
-    perspective = eval_cp if engine_color == "white" else -eval_cp
-    if abs(perspective) < 40:
-        return "Engine evaluation keeps the position roughly level."
-    pawns = abs(perspective) / 100
-    formatted = f"{pawns:.2f}".rstrip('0').rstrip('.')
-    if perspective > 0:
-        return f"The engine sees itself ahead by about {formatted} pawns."
-    return f"The engine still trails by roughly {formatted} pawns."
-
-
 def _color_name(color: chess.Color) -> str:
     return "White" if color == chess.WHITE else "Black"
+
+
+def _plan_prompt(board: chess.Board, mover_color: chess.Color) -> str:
+    opponent = chess.BLACK if mover_color == chess.WHITE else chess.WHITE
+    mover_plan = _plan_for_color(board, mover_color, opponent)
+    opponent_plan = _plan_for_color(board, opponent, mover_color)
+    return f"{mover_plan} {opponent_plan}".strip()
+
+
+def _plan_for_color(board: chess.Board, color: chess.Color, opponent: chess.Color) -> str:
+    tips: list[str] = []
+    center_counts = _center_control_counts(board)
+    center_diff = center_counts[color] - center_counts[opponent]
+    if center_diff >= 2:
+        tips.append("lean on the central grip and reroute minor pieces onto outposts.")
+    elif center_diff <= -2:
+        tips.append("challenge the center with timely pawn breaks.")
+    advanced = _advanced_piece_counts(board)
+    space_diff = advanced[color] - advanced[opponent]
+    if space_diff >= 2:
+        tips.append("use the space edge to double rooks on the dominant file.")
+    elif space_diff <= -2:
+        tips.append("trade a few pieces to relieve the cramped camp.")
+    if _has_bishop_pair(board, color) and not _has_bishop_pair(board, opponent):
+        tips.append("keep lines open so the bishops stay monstrous.")
+    passed = _passed_pawns(board, color)
+    if passed:
+        files = ", ".join(chess.square_name(sq) for sq in passed)
+        tips.append(f"nurse the passed pawn on {files} with rook support.")
+    if not tips:
+        tips.append("improve the least active piece and coordinate with the rooks.")
+    return f"{_color_name(color)} plan: {tips[0]}"
 
 
 def _detect_themes(
