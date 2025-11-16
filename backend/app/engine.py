@@ -173,6 +173,9 @@ def _summarize_move(
 ) -> str:
     parts: list[str] = []
     parts.append(_primary_action_sentence(before, after, move, mover_color))
+    theme = _theme_sentence(before, after, move, mover_color)
+    if theme:
+        parts.append(theme)
     parts.extend(_follow_up_sentences(after, move, mover_color))
     score_blurb = _score_sentence(eval_cp, engine_color)
     if score_blurb:
@@ -308,3 +311,75 @@ def _aligns_with_king(after: chess.Board, move: chess.Move, mover_color: chess.C
         if after.piece_at(sq):
             return False
     return True
+
+
+def _theme_sentence(
+    before: chess.Board,
+    after: chess.Board,
+    move: chess.Move,
+    mover_color: chess.Color,
+) -> str:
+    themes = _detect_themes(before, after, move, mover_color)
+    if not themes:
+        return ""
+    THEME_DESCRIPTIONS = {
+        "king_safety": "Prioritizes king safety so the attack can continue from a stable base.",
+        "central_control": "Strengthens central control to choke your counterplay.",
+        "material_gain": "Keeps the plan pragmatic by banking material.",
+        "piece_activity": "Builds piece activity to improve future coordination.",
+        "king_attack": "Feeds into the broader attack on your king.",
+        "space_gain": "Claims extra space to squeeze your position.",
+        "passed_pawn": "Commits to a long-term plan of advancing the passed pawn.",
+        "simplification": "Steers toward a simplified position that favors the engine's structure.",
+    }
+    ordered = [desc for key, desc in THEME_DESCRIPTIONS.items() if key in themes]
+    return ordered[0] if ordered else ""
+
+
+def _detect_themes(
+    before: chess.Board,
+    after: chess.Board,
+    move: chess.Move,
+    mover_color: chess.Color,
+) -> set[str]:
+    themes: set[str] = set()
+    piece_type = before.piece_type_at(move.from_square) or chess.PAWN
+    destination = move.to_square
+    if before.is_castling(move) or piece_type == chess.KING:
+        themes.add("king_safety")
+    if piece_type == chess.PAWN and _is_center_square(destination):
+        themes.add("central_control")
+    if piece_type in (chess.KNIGHT, chess.BISHOP, chess.QUEEN) and _is_strong_center(destination):
+        themes.add("central_control")
+        themes.add("piece_activity")
+    if piece_type == chess.ROOK and _file_is_open(after, destination):
+        themes.add("piece_activity")
+    if before.is_capture(move):
+        themes.add("material_gain")
+        if before.piece_type_at(move.from_square) == before.piece_type_at(move.to_square):
+            themes.add("simplification")
+    if after.is_check() or _aligns_with_king(after, move, mover_color):
+        themes.add("king_attack")
+    if _creates_passed_pawn(after, move, mover_color):
+        themes.add("passed_pawn")
+    if piece_type == chess.PAWN and _pushes_space(move, mover_color):
+        themes.add("space_gain")
+    if piece_type in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN) and _advanced_piece_placement(
+        destination, mover_color
+    ):
+        themes.add("piece_activity")
+    return themes
+
+
+def _is_center_square(square: chess.Square) -> bool:
+    return chess.square_file(square) in (2, 3, 4, 5) and chess.square_rank(square) in (2, 3, 4, 5)
+
+
+def _pushes_space(move: chess.Move, mover_color: chess.Color) -> bool:
+    rank = chess.square_rank(move.to_square)
+    return rank >= 4 if mover_color == chess.WHITE else rank <= 3
+
+
+def _advanced_piece_placement(square: chess.Square, mover_color: chess.Color) -> bool:
+    rank = chess.square_rank(square)
+    return rank >= 4 if mover_color == chess.WHITE else rank <= 3
