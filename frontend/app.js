@@ -21,14 +21,15 @@ const refs = {
   board: document.getElementById("board"),
   moveList: document.getElementById("moveList"),
   profileOutput: document.getElementById("profileOutput"),
-  explanationSummary: document.getElementById("explanationSummary"),
-  explanationDetails: document.getElementById("explanationDetails"),
+  insightSummary: document.getElementById("insightSummary"),
+  insightDetails: document.getElementById("insightDetails"),
+  evalScore: document.getElementById("evalScore"),
+  evalDescriptor: document.getElementById("evalDescriptor"),
+  positionDescriptor: document.getElementById("positionDescriptor"),
+  themeTags: document.getElementById("themeTags"),
+  analysisMoves: document.getElementById("analysisMoves"),
   sessionStatus: document.getElementById("sessionStatus"),
-  streamOutput: document.getElementById("streamOutput"),
-  eventLog: document.getElementById("eventLog"),
-  analyticsSummary: document.getElementById("analyticsSummary"),
-  analyticsEvents: document.getElementById("analyticsEvents"),
-  refreshAnalyticsBtn: document.getElementById("refreshAnalyticsBtn"),
+  refreshInsightBtn: document.getElementById("refreshInsightBtn"),
   moveForm: document.getElementById("moveForm"),
   engineMoveBtn: document.getElementById("engineMoveBtn"),
   difficultySelect: document.getElementById("difficultySelect"),
@@ -38,8 +39,7 @@ refs.moveInput = refs.moveForm.elements.uci;
 refs.moveSubmitBtn = refs.moveForm.querySelector('button[type="submit"]');
 
 function log(message) {
-  const timestamp = new Date().toLocaleTimeString();
-  refs.eventLog.textContent = `[${timestamp}] ${message}\n${refs.eventLog.textContent}`;
+  console.info(`[Chessica] ${message}`);
 }
 
 function updateDifficultyNote() {
@@ -55,6 +55,7 @@ function renderBoard() {
   refs.board.setAttribute("orientation", state.playerColor);
   refs.board.setAttribute("position", state.chess.fen());
   updateMoveControls();
+  updatePositionDescriptor();
 }
 
 function updateMoveControls() {
@@ -81,19 +82,125 @@ function isPlayersTurn() {
   return state.chess.turn() === desired;
 }
 
-function initTabs() {
-  const container = document.querySelector(".info-card");
-  if (!container) return;
-  const buttons = container.querySelectorAll("[data-tab-target]");
-  const panels = container.querySelectorAll("[data-tab-panel]");
-  buttons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const target = button.dataset.tabTarget;
-      buttons.forEach((btn) => btn.classList.toggle("active", btn === button));
-      panels.forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.tabPanel === target);
-      });
-    });
+function formatEval(cp) {
+  if (typeof cp !== "number") return "—";
+  const score = (cp / 100).toFixed(2);
+  return cp >= 0 ? `+${score}` : score;
+}
+
+function describeEval(cp) {
+  if (typeof cp !== "number") return "No evaluation yet";
+  const abs = Math.abs(cp);
+  if (abs < 35) return "Balanced tension";
+  if (abs < 150) return cp > 0 ? "White edge" : "Black edge";
+  if (abs < 300) return cp > 0 ? "White pressing" : "Black pressing";
+  return cp > 0 ? "White winning" : "Black winning";
+}
+
+function describeMaterialBalance() {
+  const board = state.chess.board();
+  const values = { p: 1, n: 3, b: 3.25, r: 5, q: 9 };
+  let score = 0;
+  board.flat().forEach((piece) => {
+    if (!piece) return;
+    const value = values[piece.type] || 0;
+    score += piece.color === "w" ? value : -value;
+  });
+  if (Math.abs(score) < 0.25) return "Material level.";
+  const side = score > 0 ? "White" : "Black";
+  return `${side} is up roughly ${Math.abs(score).toFixed(1)} points of material.`;
+}
+
+function updatePositionDescriptor() {
+  if (!refs.positionDescriptor) return;
+  if (!state.sessionId) {
+    refs.positionDescriptor.textContent = "Start a session to generate a position briefing.";
+    return;
+  }
+  const fenParts = state.chess.fen().split(" ");
+  const fullMoves = Number(fenParts[5]) || 1;
+  const turn = state.chess.turn() === "w" ? "White" : "Black";
+  refs.positionDescriptor.textContent = `Move ${fullMoves}, ${turn} to move. ${describeMaterialBalance()}`;
+}
+
+function resetInsights(message = "No moves yet.") {
+  if (refs.insightSummary) {
+    refs.insightSummary.textContent = message;
+  }
+  if (refs.insightDetails) {
+    refs.insightDetails.innerHTML = "<li>Submit a move to see evaluation metrics.</li>";
+  }
+  if (refs.evalScore) {
+    refs.evalScore.textContent = "+0.00";
+  }
+  if (refs.evalDescriptor) {
+    refs.evalDescriptor.textContent = "Awaiting session";
+  }
+  renderThemeTags([]);
+  renderAnalysisMoves([]);
+  updatePositionDescriptor();
+}
+
+function updateInsightFromResponse(response) {
+  if (!response || !refs.insightSummary) return;
+  refs.insightSummary.textContent = response.explanation.summary;
+  if (refs.insightDetails) {
+    refs.insightDetails.innerHTML = `
+      <li>Objective cost: ${response.explanation.objective_cost_cp} cp</li>
+      <li>Alt best move: ${response.explanation.alt_best_move} (${formatEval(response.explanation.alt_eval_cp)})</li>
+      <li>Exploit confidence: ${(response.exploit_confidence * 100).toFixed(1)}%</li>
+    `;
+  }
+  if (refs.evalScore) {
+    refs.evalScore.textContent = formatEval(response.engine_eval_cp);
+  }
+  if (refs.evalDescriptor) {
+    refs.evalDescriptor.textContent = describeEval(response.engine_eval_cp);
+  }
+  updatePositionDescriptor();
+}
+
+function renderThemeTags(themes = []) {
+  if (!refs.themeTags) return;
+  if (!themes.length) {
+    refs.themeTags.textContent = "No motifs captured yet.";
+    return;
+  }
+  refs.themeTags.innerHTML = "";
+  themes.forEach((theme) => {
+    const pill = document.createElement("span");
+    pill.textContent = theme;
+    refs.themeTags.appendChild(pill);
+  });
+}
+
+function renderAnalysisMoves(moves = []) {
+  if (!refs.analysisMoves) return;
+  if (!moves.length) {
+    refs.analysisMoves.innerHTML = "<li>No annotated moves yet.</li>";
+    return;
+  }
+  refs.analysisMoves.innerHTML = "";
+  moves.forEach((move) => {
+    const li = document.createElement("li");
+    const label = document.createElement("strong");
+    label.textContent = `${move.ply}. ${move.player_move || "…"} → ${move.engine_reply || "…"}`;
+    li.appendChild(label);
+
+    const meta = document.createElement("span");
+    meta.textContent = `Eval ${formatEval(move.objective_eval_cp)} • Exploit +${move.exploit_gain_cp} cp`;
+    li.appendChild(meta);
+
+    const motifs = document.createElement("span");
+    motifs.textContent = move.motifs?.length ? `Motifs: ${move.motifs.join(", ")}` : "Motifs: n/a";
+    li.appendChild(motifs);
+
+    if (move.explanation) {
+      const detail = document.createElement("p");
+      detail.textContent = move.explanation;
+      li.appendChild(detail);
+    }
+    refs.analysisMoves.appendChild(li);
   });
 }
 
@@ -111,13 +218,14 @@ async function createSession(payload) {
   state.playerColor = session.player_color;
   state.gameOver = false;
   state.chess.load(START_FEN);
+  resetInsights();
   refs.sessionStatus.textContent = `Session ${session.session_id} · Engine plays ${
     session.engine_color
   } · ${capitalize(session.difficulty)} (~${session.engine_rating} Elo, depth ${session.engine_depth})`;
   log(`Created session ${session.session_id}`);
   await loadSessionDetail();
   connectStream();
-  await fetchAnalytics(true);
+  await fetchPositionAnalysis(true);
 }
 
 async function loadSessionDetail() {
@@ -128,6 +236,7 @@ async function loadSessionDetail() {
   state.sessionDetail = detail;
   state.movePairs = [];
   state.chess.load(detail.fen);
+  resetInsights(detail.moves.length ? "Resume play to update insights." : "No moves yet.");
   refs.sessionStatus.textContent = `Session ${detail.session_id} · Engine plays ${detail.engine_color} · ${capitalize(
     detail.difficulty,
   )} (~${detail.engine_rating} Elo, depth ${detail.engine_depth})`;
@@ -137,46 +246,35 @@ async function loadSessionDetail() {
   detail.moves.forEach((move, idx) => appendMoveListItem(idx + 1, move));
 }
 
-async function fetchAnalytics(autoRefresh = false) {
+async function fetchPositionAnalysis(autoRefresh = false) {
   if (!state.sessionId) {
-    refs.analyticsSummary.textContent = "Start a session to view analytics.";
-    refs.analyticsEvents.innerHTML = "";
+    renderThemeTags([]);
+    renderAnalysisMoves([]);
     return;
   }
-  refs.analyticsSummary.textContent = autoRefresh ? "Updating analytics…" : "Refreshing analytics…";
+  if (!autoRefresh && refs.refreshInsightBtn) {
+    refs.refreshInsightBtn.disabled = true;
+  }
   try {
-    const res = await fetch(`${API_BASE}/analytics/sessions/${state.sessionId}/events`);
+    const res = await fetch(`${API_BASE}/sessions/${state.sessionId}/analysis`);
     if (!res.ok) {
-      throw new Error(`Analytics request failed (${res.status})`);
+      throw new Error(`Insight request failed (${res.status})`);
     }
     const data = await res.json();
-    const counts = data.summary.counts_by_type;
-    const parts = Object.entries(counts)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(" · ");
-    refs.analyticsSummary.textContent = `Events: ${data.summary.total_events} (${parts || "no data"})`;
-    refs.analyticsEvents.innerHTML = "";
-    data.events.slice(-10).forEach((event) => {
-      const li = document.createElement("li");
-      li.textContent = `[${new Date(event.created_at).toLocaleTimeString()}] ${event.event_type}: ${formatEventPayload(
-        event,
-      )}`;
-      refs.analyticsEvents.prepend(li);
-    });
+    renderThemeTags(data.summary?.themes ?? []);
+    renderAnalysisMoves(data.moves ?? []);
   } catch (error) {
-    refs.analyticsSummary.textContent = error.message;
-    refs.analyticsEvents.innerHTML = "";
+    if (refs.themeTags) {
+      refs.themeTags.textContent = error.message;
+    }
+    if (refs.analysisMoves) {
+      refs.analysisMoves.innerHTML = "";
+    }
+  } finally {
+    if (refs.refreshInsightBtn) {
+      refs.refreshInsightBtn.disabled = false;
+    }
   }
-}
-
-function formatEventPayload(event) {
-  if (event.payload?.uci) {
-    return `move ${event.payload.uci}`;
-  }
-  if (event.event_type === "session_resigned") {
-    return "session ended";
-  }
-  return JSON.stringify(event.payload);
 }
 
 async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
@@ -231,12 +329,7 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
   state.chess.load(response.game_state.fen);
   renderBoard();
   refs.profileOutput.textContent = JSON.stringify(response.opponent_profile, null, 2);
-  refs.explanationSummary.textContent = response.explanation.summary;
-  refs.explanationDetails.innerHTML = `
-    <li>Objective cost: ${response.explanation.objective_cost_cp} cp</li>
-    <li>Alt best move: ${response.explanation.alt_best_move} (${response.explanation.alt_eval_cp} cp)</li>
-    <li>Exploit confidence: ${(response.exploit_confidence * 100).toFixed(1)}%</li>
-  `;
+  updateInsightFromResponse(response);
 
   if (uciValue) {
     const pairText = response.engine_move ? `${uciValue} / ${response.engine_move}` : `${uciValue}`;
@@ -250,7 +343,7 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
   } else if (response.result) {
     log(response.message || `Game over (${response.result}).`);
   }
-  await fetchAnalytics(true);
+  await fetchPositionAnalysis(true);
   if (response.result) {
     state.gameOver = true;
     refs.sessionStatus.textContent = response.message || `Game over (${response.result})`;
@@ -274,7 +367,7 @@ function connectStream() {
   const socket = new WebSocket(`${WS_BASE}/sessions/${state.sessionId}/stream`);
   state.socket = socket;
   socket.onopen = () => {
-    refs.streamOutput.textContent = "Stream connected.";
+    log("Stream connected.");
   };
   socket.onmessage = (event) => {
     try {
@@ -286,17 +379,14 @@ function connectStream() {
         log(message);
         updateMoveControls();
       }
-      refs.streamOutput.textContent = `${event.data}\n${refs.streamOutput.textContent}`;
     } catch (error) {
-      refs.streamOutput.textContent = `${event.data}\n${refs.streamOutput.textContent}`;
+      log(`Stream message: ${event.data}`);
     }
   };
   socket.onclose = () => {
-    refs.streamOutput.textContent = "Stream closed.";
+    log("Stream closed.");
   };
 }
-
-initTabs();
 
 document.getElementById("sessionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -346,9 +436,11 @@ refs.engineMoveBtn.addEventListener("click", async () => {
   }
 });
 
-refs.refreshAnalyticsBtn.addEventListener("click", () => {
-  fetchAnalytics(false);
-});
+if (refs.refreshInsightBtn) {
+  refs.refreshInsightBtn.addEventListener("click", () => {
+    fetchPositionAnalysis(false);
+  });
+}
 
 if (refs.difficultySelect) {
   refs.difficultySelect.addEventListener("change", updateDifficultyNote);
@@ -392,3 +484,4 @@ function capitalize(value) {
 }
 
 renderBoard();
+resetInsights();

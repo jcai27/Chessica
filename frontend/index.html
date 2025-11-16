@@ -103,43 +103,33 @@
             </div>
           </section>
 
-          <section class="card explanation-card">
+          <section class="card insight-card">
             <div class="card-header">
-              <h2>Move Narrative</h2>
-              <span>themes & tactics</span>
+              <div>
+                <h2>Position Intelligence</h2>
+                <span>evaluations, themes & context</span>
+              </div>
+              <button type="button" id="refreshInsightBtn">Refresh insight</button>
             </div>
-            <p id="explanationSummary">No moves yet.</p>
-            <ul id="explanationDetails"></ul>
-          </section>
-
-          <section class="card stream-card">
-            <div class="card-header">
-              <h2>Engine Stream</h2>
-              <span>websocket feed</span>
-            </div>
-            <pre id="streamOutput">Connect via session start.</pre>
-          </section>
-
-          <section class="card info-card">
-            <div class="tabs">
-              <button class="tab active" data-tab-target="moves">Moves</button>
-              <button class="tab" data-tab-target="events">Event Log</button>
-              <button class="tab" data-tab-target="analytics">Analytics</button>
-            </div>
-            <div class="tab-panels">
-              <div class="pane active" data-tab-panel="moves">
+            <div class="insight-grid">
+              <div class="insight-eval">
+                <div class="eval-score" id="evalScore">+0.00</div>
+                <span id="evalDescriptor">Awaiting session</span>
+                <p id="positionDescriptor">Start a session to generate a position briefing.</p>
+              </div>
+              <div class="insight-section">
+                <h3>Current Narrative</h3>
+                <p id="insightSummary">No moves yet.</p>
+                <ul id="insightDetails" class="insight-details"></ul>
+              </div>
+              <div class="insight-section">
+                <h3>Key Themes</h3>
+                <div id="themeTags" class="theme-tags">—</div>
+              </div>
+              <div class="insight-section">
+                <h3>Move Breakdown</h3>
                 <ol id="moveList"></ol>
-              </div>
-              <div class="pane" data-tab-panel="events">
-                <pre id="eventLog"></pre>
-              </div>
-              <div class="pane" data-tab-panel="analytics">
-                <div class="analytics-header">
-                  <h3>Session Analytics</h3>
-                  <button type="button" id="refreshAnalyticsBtn">Refresh</button>
-                </div>
-                <div id="analyticsSummary" class="analytics-summary">Start a session to view analytics.</div>
-                <ol id="analyticsEvents"></ol>
+                <ul id="analysisMoves" class="analysis-moves"></ul>
               </div>
             </div>
           </section>
