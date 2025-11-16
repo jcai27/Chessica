@@ -13,6 +13,7 @@ const state = {
   socket: null,
   movePairs: [],
   chess: new Chess(),
+  notationTracker: new Chess(),
   playerColor: "white",
   gameOver: false,
 };
@@ -20,7 +21,6 @@ const state = {
 const refs = {
   board: document.getElementById("board"),
   moveList: document.getElementById("moveList"),
-  profileOutput: document.getElementById("profileOutput"),
   insightSummary: document.getElementById("insightSummary"),
   insightDetails: document.getElementById("insightDetails"),
   evalScore: document.getElementById("evalScore"),
@@ -30,6 +30,11 @@ const refs = {
   analysisMoves: document.getElementById("analysisMoves"),
   sessionStatus: document.getElementById("sessionStatus"),
   refreshInsightBtn: document.getElementById("refreshInsightBtn"),
+  tacticalValue: document.getElementById("tacticalValue"),
+  tacticalBar: document.getElementById("tacticalBar"),
+  positionalValue: document.getElementById("positionalValue"),
+  riskValue: document.getElementById("riskValue"),
+  riskBar: document.getElementById("riskBar"),
   moveForm: document.getElementById("moveForm"),
   engineMoveBtn: document.getElementById("engineMoveBtn"),
   difficultySelect: document.getElementById("difficultySelect"),
@@ -123,6 +128,65 @@ function updatePositionDescriptor() {
   refs.positionDescriptor.textContent = `Move ${fullMoves}, ${turn} to move. ${describeMaterialBalance()}`;
 }
 
+function resetMoveHistory() {
+  state.movePairs = [];
+  state.notationTracker = new Chess();
+  renderMoveList();
+}
+
+function rebuildNotationFromMoves(moves = []) {
+  resetMoveHistory();
+  moves.forEach((uci) => applyUciToNotation(uci));
+}
+
+function renderMoveList() {
+  if (!refs.moveList) return;
+  refs.moveList.innerHTML = "";
+  if (!state.movePairs.length) {
+    const placeholder = document.createElement("li");
+    placeholder.textContent = "No moves recorded.";
+    refs.moveList.appendChild(placeholder);
+    return;
+  }
+  state.movePairs.forEach((pair) => {
+    const li = document.createElement("li");
+    const blackMove = pair.black ? pair.black : "…";
+    li.textContent = `${pair.number}. ${pair.white || "…"} ${blackMove}`;
+    refs.moveList.appendChild(li);
+  });
+}
+
+function applyUciToNotation(uci) {
+  if (!uci || !state.notationTracker) return null;
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  const promotion = uci.length > 4 ? uci.slice(4) : undefined;
+  const move = state.notationTracker.move({ from, to, promotion });
+  if (!move) return null;
+  addSanMove(move.san, move.color === "w" ? "white" : "black");
+  return move.san;
+}
+
+function addSanMove(san, color) {
+  if (!san) return;
+  if (color === "white") {
+    const number = state.movePairs.length + 1;
+    state.movePairs.push({ number, white: san, black: null });
+  } else {
+    if (state.movePairs.length === 0) {
+      state.movePairs.push({ number: 1, white: "…", black: san });
+    } else {
+      const last = state.movePairs[state.movePairs.length - 1];
+      if (last.black) {
+        state.movePairs.push({ number: state.movePairs.length + 1, white: "…", black: san });
+      } else {
+        last.black = san;
+      }
+    }
+  }
+  renderMoveList();
+}
+
 function resetInsights(message = "No moves yet.") {
   if (refs.insightSummary) {
     refs.insightSummary.textContent = message;
@@ -139,6 +203,7 @@ function resetInsights(message = "No moves yet.") {
   renderThemeTags([]);
   renderAnalysisMoves([]);
   updatePositionDescriptor();
+  updateTendencies(null);
 }
 
 function updateInsightFromResponse(response) {
@@ -204,6 +269,41 @@ function renderAnalysisMoves(moves = []) {
   });
 }
 
+function updateTendencies(profile) {
+  const tactical = Math.round((profile?.style?.tactical ?? 0) * 100);
+  const positional = 100 - tactical;
+  const risk = Math.round((profile?.style?.risk ?? 0) * 100);
+  if (refs.tacticalValue) {
+    refs.tacticalValue.textContent = `${tactical}%`;
+  }
+  if (refs.positionalValue) {
+    refs.positionalValue.textContent = `Positional: ${positional}%`;
+  }
+  if (refs.tacticalBar) {
+    refs.tacticalBar.style.width = `${tactical}%`;
+  }
+  if (refs.riskValue) {
+    refs.riskValue.textContent = `${risk}%`;
+  }
+  if (refs.riskBar) {
+    refs.riskBar.style.width = `${risk}%`;
+  }
+}
+
+function initInsightTabs() {
+  const tabs = document.querySelectorAll(".insight-tab");
+  const panes = document.querySelectorAll(".insight-pane");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.insightTab;
+      tabs.forEach((btn) => btn.classList.toggle("active", btn === tab));
+      panes.forEach((pane) => {
+        pane.classList.toggle("active", pane.dataset.insightPanel === target);
+      });
+    });
+  });
+}
+
 async function createSession(payload) {
   const res = await fetch(`${API_BASE}/sessions`, {
     method: "POST",
@@ -219,6 +319,7 @@ async function createSession(payload) {
   state.gameOver = false;
   state.chess.load(START_FEN);
   resetInsights();
+  resetMoveHistory();
   refs.sessionStatus.textContent = `Session ${session.session_id} · Engine plays ${
     session.engine_color
   } · ${capitalize(session.difficulty)} (~${session.engine_rating} Elo, depth ${session.engine_depth})`;
@@ -234,16 +335,14 @@ async function loadSessionDetail() {
   if (!res.ok) throw new Error("Failed to load session detail");
   const detail = await res.json();
   state.sessionDetail = detail;
-  state.movePairs = [];
   state.chess.load(detail.fen);
   resetInsights(detail.moves.length ? "Resume play to update insights." : "No moves yet.");
   refs.sessionStatus.textContent = `Session ${detail.session_id} · Engine plays ${detail.engine_color} · ${capitalize(
     detail.difficulty,
   )} (~${detail.engine_rating} Elo, depth ${detail.engine_depth})`;
   renderBoard();
-  refs.profileOutput.textContent = JSON.stringify(detail.opponent_profile, null, 2);
-  refs.moveList.innerHTML = "";
-  detail.moves.forEach((move, idx) => appendMoveListItem(idx + 1, move));
+  updateTendencies(detail.opponent_profile);
+  rebuildNotationFromMoves(detail.moves || []);
 }
 
 async function fetchPositionAnalysis(autoRefresh = false) {
@@ -328,18 +427,15 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
   };
   state.chess.load(response.game_state.fen);
   renderBoard();
-  refs.profileOutput.textContent = JSON.stringify(response.opponent_profile, null, 2);
+  updateTendencies(response.opponent_profile);
   updateInsightFromResponse(response);
 
   if (uciValue) {
-    const pairText = response.engine_move ? `${uciValue} / ${response.engine_move}` : `${uciValue}`;
-    appendMoveListItem(state.movePairs.length + 1, pairText);
-  } else {
-    const pairText = response.engine_move ? `(engine start) / ${response.engine_move}` : "(engine start)";
-    appendMoveListItem(state.movePairs.length + 1, pairText);
+    applyUciToNotation(uciValue);
   }
   if (response.engine_move) {
     log(`Engine replied with ${response.engine_move} (eval ${response.engine_eval_cp} cp)`);
+    applyUciToNotation(response.engine_move);
   } else if (response.result) {
     log(response.message || `Game over (${response.result}).`);
   }
@@ -350,13 +446,6 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
   }
   updateMoveControls();
   return response;
-}
-
-function appendMoveListItem(idx, text) {
-  const li = document.createElement("li");
-  li.textContent = `${idx}. ${text}`;
-  refs.moveList.appendChild(li);
-  state.movePairs.push(text);
 }
 
 function connectStream() {
@@ -387,6 +476,8 @@ function connectStream() {
     log("Stream closed.");
   };
 }
+
+initInsightTabs();
 
 document.getElementById("sessionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -485,3 +576,4 @@ function capitalize(value) {
 
 renderBoard();
 resetInsights();
+resetMoveHistory();

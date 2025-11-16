@@ -97,9 +97,30 @@
                 <button type="button" id="engineMoveBtn">Ask Engine to Move</button>
               </div>
             </form>
-            <div class="profile-block">
-              <h3>Opponent Snapshot</h3>
-              <pre id="profileOutput">—</pre>
+            <div class="tendency-block">
+              <h3>Opponent Tendencies</h3>
+              <div class="tendency-grid">
+                <div class="tendency-meter">
+                  <div class="meter-label">
+                    <span>Tactical vs positional</span>
+                    <span id="tacticalValue">0%</span>
+                  </div>
+                  <div class="meter-bar">
+                    <div class="meter-fill" id="tacticalBar"></div>
+                  </div>
+                  <small id="positionalValue">Positional: 0%</small>
+                </div>
+                <div class="tendency-meter">
+                  <div class="meter-label">
+                    <span>Risk appetite</span>
+                    <span id="riskValue">0%</span>
+                  </div>
+                  <div class="meter-bar">
+                    <div class="meter-fill" id="riskBar"></div>
+                  </div>
+                  <small>0% safety · 100% chaos</small>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -111,25 +132,36 @@
               </div>
               <button type="button" id="refreshInsightBtn">Refresh insight</button>
             </div>
-            <div class="insight-grid">
-              <div class="insight-eval">
-                <div class="eval-score" id="evalScore">+0.00</div>
-                <span id="evalDescriptor">Awaiting session</span>
-                <p id="positionDescriptor">Start a session to generate a position briefing.</p>
+            <div class="insight-eval">
+              <div class="eval-score" id="evalScore">+0.00</div>
+              <span id="evalDescriptor">Awaiting session</span>
+              <p id="positionDescriptor">Start a session to generate a position briefing.</p>
+            </div>
+            <div class="insight-tabs">
+              <button class="insight-tab active" data-insight-tab="narrative">Narrative</button>
+              <button class="insight-tab" data-insight-tab="breakdown">Move Breakdown</button>
+            </div>
+            <div class="insight-panels">
+              <div class="insight-pane active" data-insight-panel="narrative">
+                <div class="insight-section">
+                  <h3>Current Narrative</h3>
+                  <p id="insightSummary">No moves yet.</p>
+                  <ul id="insightDetails" class="insight-details"></ul>
+                </div>
+                <div class="insight-section">
+                  <h3>Key Themes</h3>
+                  <div id="themeTags" class="theme-tags">—</div>
+                </div>
               </div>
-              <div class="insight-section">
-                <h3>Current Narrative</h3>
-                <p id="insightSummary">No moves yet.</p>
-                <ul id="insightDetails" class="insight-details"></ul>
-              </div>
-              <div class="insight-section">
-                <h3>Key Themes</h3>
-                <div id="themeTags" class="theme-tags">—</div>
-              </div>
-              <div class="insight-section">
-                <h3>Move Breakdown</h3>
-                <ol id="moveList"></ol>
-                <ul id="analysisMoves" class="analysis-moves"></ul>
+              <div class="insight-pane" data-insight-panel="breakdown">
+                <div class="insight-section">
+                  <h3>Move List</h3>
+                  <ol id="moveList"></ol>
+                </div>
+                <div class="insight-section">
+                  <h3>Analysis Stream</h3>
+                  <ul id="analysisMoves" class="analysis-moves"></ul>
+                </div>
               </div>
             </div>
           </section>
