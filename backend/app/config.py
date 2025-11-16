@@ -33,7 +33,7 @@ def _default_stockfish_path() -> str:
 class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     project_name: str = "Chessica API"
-    allow_origins: list[str] = ["*"]
+    allow_origins: list[str] = ["http://localhost:4173", "https://chessica-gamma.vercel.app"]
     websocket_url: str = "wss://localhost:8000"
     database_url: str = "sqlite:///../chessica.db"
     redis_url: str | None = None

@@ -1,7 +1,10 @@
 import { Chess } from "https://cdn.skypack.dev/chess.js@1.0.0";
 
-const API_BASE = "http://localhost:8000/api/v1";
-const WS_BASE = "ws://localhost:8000/api/v1";
+const PROD_API_BASE = "https://chessica-1nh3.onrender.com";
+const PROD_WS_BASE = "wss://chessica-1nh3.onrender.com";
+const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const API_BASE = `${isLocal ? "http://localhost:8000" : PROD_API_BASE}/api/v1`;
+const WS_BASE = `${isLocal ? "ws://localhost:8000" : PROD_WS_BASE}/api/v1`;
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 const state = {
