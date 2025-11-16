@@ -109,13 +109,31 @@ body {
   font-size: 0.86rem;
 }
 
-.controls-form input,
+.controls-form label span {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .controls-form select {
   padding: 0.5rem 0.65rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(9, 14, 32, 0.75);
   color: var(--text);
+  font-weight: 600;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent-2) 50%),
+    linear-gradient(135deg, var(--accent-2) 50%, transparent 50%), radial-gradient(circle at center, var(--accent), var(--accent-2));
+  background-position: calc(100% - 1.3rem) calc(50% - 0.15rem), calc(100% - 1rem) calc(50% - 0.15rem), calc(100% - 0.8rem) 50%;
+  background-size: 8px 8px, 8px 8px, 14px 14px;
+  background-repeat: no-repeat;
+}
+
+.controls-form select:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25);
 }
 
 .controls-form button {
@@ -126,6 +144,7 @@ body {
   color: #071125;
   font-weight: 600;
   cursor: pointer;
+  grid-column: 1 / -1;
 }
 
 .difficulty-indicator {
@@ -207,68 +226,11 @@ body {
   letter-spacing: 0.06em;
 }
 
-.move-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.8rem;
-  align-items: end;
-}
-
-.move-form label {
+.tendencies-card {
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  color: var(--muted);
-}
-
-.move-form input {
-  padding: 0.5rem 0.65rem;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-}
-
-.button-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.button-row button {
-  flex: 1;
-  padding: 0.65rem;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.button-row button:first-child {
-  background: linear-gradient(135deg, #10b981, #34d399);
-  color: #05131f;
-}
-
-#engineMoveBtn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text);
-}
-
-.tendency-block {
-  margin-top: 0.9rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 0.9rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.tendency-block h3 {
-  margin: 0;
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
+  gap: 0.75rem;
 }
 
 .tendency-grid {

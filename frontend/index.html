@@ -24,32 +24,24 @@
 
       <section class="controls card">
         <form id="sessionForm" class="controls-form">
-          <label>
-            Color
+          <label class="select-field">
+            <span>Color</span>
             <select name="color">
               <option value="auto" selected>Auto</option>
               <option value="white">White</option>
               <option value="black">Black</option>
             </select>
           </label>
-          <label>
-            Exploit Mode
+          <label class="select-field">
+            <span>Exploit Mode</span>
             <select name="exploit_mode">
               <option value="auto" selected>Auto</option>
               <option value="on">On</option>
               <option value="off">Off</option>
             </select>
           </label>
-          <label>
-            Initial Time (sec)
-            <input name="initial" type="number" value="300" min="60" step="30" />
-          </label>
-          <label>
-            Increment (sec)
-            <input name="increment" type="number" value="2" min="0" step="1" />
-          </label>
-          <label>
-            Difficulty
+          <label class="select-field">
+            <span>Difficulty</span>
             <select name="difficulty" id="difficultySelect">
               <option value="beginner" data-depth="1" data-rating="800">Beginner (~800)</option>
               <option value="intermediate" data-depth="2" data-rating="1200">Intermediate (~1200)</option>
@@ -79,47 +71,34 @@
         </div>
 
         <div class="right-column">
-          <section class="card console-card">
+          <section class="card tendencies-card">
             <div class="card-header">
               <div>
-                <h2>Move Console</h2>
-                <span>issue commands or let Chessica reply</span>
+                <h2>Opponent Tendencies</h2>
+                <span>style, risk & adaptive profile</span>
               </div>
               <span class="session-chip" id="sessionStatus">No active session</span>
             </div>
-            <form id="moveForm" class="move-form">
-              <label>
-                Your Move (UCI)
-                <input name="uci" type="text" placeholder="e2e4" autocomplete="off" />
-              </label>
-              <div class="button-row">
-                <button type="submit">Submit Move</button>
-                <button type="button" id="engineMoveBtn">Ask Engine to Move</button>
+            <div class="tendency-grid">
+              <div class="tendency-meter">
+                <div class="meter-label">
+                  <span>Tactical vs positional</span>
+                  <span id="tacticalValue">0%</span>
+                </div>
+                <div class="meter-bar">
+                  <div class="meter-fill" id="tacticalBar"></div>
+                </div>
+                <small id="positionalValue">Positional: 0%</small>
               </div>
-            </form>
-            <div class="tendency-block">
-              <h3>Opponent Tendencies</h3>
-              <div class="tendency-grid">
-                <div class="tendency-meter">
-                  <div class="meter-label">
-                    <span>Tactical vs positional</span>
-                    <span id="tacticalValue">0%</span>
-                  </div>
-                  <div class="meter-bar">
-                    <div class="meter-fill" id="tacticalBar"></div>
-                  </div>
-                  <small id="positionalValue">Positional: 0%</small>
+              <div class="tendency-meter">
+                <div class="meter-label">
+                  <span>Risk appetite</span>
+                  <span id="riskValue">0%</span>
                 </div>
-                <div class="tendency-meter">
-                  <div class="meter-label">
-                    <span>Risk appetite</span>
-                    <span id="riskValue">0%</span>
-                  </div>
-                  <div class="meter-bar">
-                    <div class="meter-fill" id="riskBar"></div>
-                  </div>
-                  <small>0% safety · 100% chaos</small>
+                <div class="meter-bar">
+                  <div class="meter-fill" id="riskBar"></div>
                 </div>
+                <small>0% safety · 100% chaos</small>
               </div>
             </div>
           </section>

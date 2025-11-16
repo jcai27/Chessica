@@ -6,6 +6,10 @@ const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 const API_BASE = `${isLocal ? "http://localhost:8000" : PROD_API_BASE}/api/v1`;
 const WS_BASE = `${isLocal ? "ws://localhost:8000" : PROD_WS_BASE}/api/v1`;
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const DEFAULT_TIME_CONTROL = {
+  initial_ms: 300000,
+  increment_ms: 2000,
+};
 
 const state = {
   sessionId: null,
@@ -35,13 +39,9 @@ const refs = {
   positionalValue: document.getElementById("positionalValue"),
   riskValue: document.getElementById("riskValue"),
   riskBar: document.getElementById("riskBar"),
-  moveForm: document.getElementById("moveForm"),
-  engineMoveBtn: document.getElementById("engineMoveBtn"),
   difficultySelect: document.getElementById("difficultySelect"),
   difficultyNote: document.getElementById("difficultyNote"),
 };
-refs.moveInput = refs.moveForm.elements.uci;
-refs.moveSubmitBtn = refs.moveForm.querySelector('button[type="submit"]');
 
 function log(message) {
   console.info(`[Chessica] ${message}`);
@@ -59,27 +59,7 @@ function updateDifficultyNote() {
 function renderBoard() {
   refs.board.setAttribute("orientation", state.playerColor);
   refs.board.setAttribute("position", state.chess.fen());
-  updateMoveControls();
   updatePositionDescriptor();
-}
-
-function updateMoveControls() {
-  const yourTurn = isPlayersTurn();
-  const disableAll = state.gameOver || !state.sessionId;
-  if (refs.moveSubmitBtn) {
-    refs.moveSubmitBtn.disabled = disableAll || !yourTurn;
-  }
-  if (refs.moveInput) {
-    refs.moveInput.disabled = disableAll || !yourTurn;
-    refs.moveInput.placeholder = state.gameOver
-      ? "Game over"
-      : yourTurn
-        ? "e2e4"
-        : "Waiting for engine…";
-  }
-  if (refs.engineMoveBtn) {
-    refs.engineMoveBtn.disabled = disableAll || yourTurn;
-  }
 }
 
 function isPlayersTurn() {
@@ -290,6 +270,17 @@ function updateTendencies(profile) {
   }
 }
 
+async function ensureEngineOpensIfNeeded() {
+  if (!state.sessionId || state.gameOver) return;
+  if (!isPlayersTurn()) {
+    try {
+      await submitMove(null, { bypassTurnCheck: true, suppressAlerts: true });
+    } catch (error) {
+      log(error.message);
+    }
+  }
+}
+
 function initInsightTabs() {
   const tabs = document.querySelectorAll(".insight-tab");
   const panes = document.querySelectorAll(".insight-pane");
@@ -343,6 +334,7 @@ async function loadSessionDetail() {
   renderBoard();
   updateTendencies(detail.opponent_profile);
   rebuildNotationFromMoves(detail.moves || []);
+  await ensureEngineOpensIfNeeded();
 }
 
 async function fetchPositionAnalysis(autoRefresh = false) {
@@ -376,17 +368,17 @@ async function fetchPositionAnalysis(autoRefresh = false) {
   }
 }
 
-async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
+async function submitMove(uciValue, { bypassTurnCheck = false, suppressAlerts = false } = {}) {
   if (!state.sessionId) {
-    alert("Create a session first.");
+    if (!suppressAlerts) alert("Create a session first.");
     return;
   }
   if (state.gameOver) {
-    alert("Game over. Start a new session.");
+    if (!suppressAlerts) alert("Game over. Start a new session.");
     return;
   }
   if (uciValue && !bypassTurnCheck && !isPlayersTurn()) {
-    alert("Wait for the engine to move first.");
+    if (!suppressAlerts) alert("Wait for the engine to move first.");
     return;
   }
 
@@ -415,7 +407,7 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
     log(`Move rejected: ${errorText}`);
     state.chess.load(previousFen);
     renderBoard();
-    alert("Move failed; see log for details.");
+    if (!suppressAlerts) alert("Move failed; see log for details.");
     throw new Error(errorText);
   }
 
@@ -444,7 +436,6 @@ async function submitMove(uciValue, { bypassTurnCheck = false } = {}) {
     state.gameOver = true;
     refs.sessionStatus.textContent = response.message || `Game over (${response.result})`;
   }
-  updateMoveControls();
   return response;
 }
 
@@ -466,7 +457,6 @@ function connectStream() {
         const message = data.payload?.message || "Game over.";
         refs.sessionStatus.textContent = message;
         log(message);
-        updateMoveControls();
       }
     } catch (error) {
       log(`Stream message: ${event.data}`);
@@ -487,43 +477,13 @@ document.getElementById("sessionForm").addEventListener("submit", async (event) 
     color: form.get("color"),
     exploit_mode: form.get("exploit_mode"),
     difficulty: form.get("difficulty"),
-    time_control: {
-      initial_ms: Number(form.get("initial")) * 1000,
-      increment_ms: Number(form.get("increment")) * 1000,
-    },
+    time_control: DEFAULT_TIME_CONTROL,
   };
   try {
     await createSession(payload);
   } catch (error) {
     log(error.message);
     alert("Failed to create session. Check backend logs.");
-  }
-});
-
-refs.moveForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const inputValue = refs.moveInput.value.trim();
-  if (!inputValue) {
-    alert("Enter a move in UCI format (e.g., e2e4).");
-    return;
-  }
-  try {
-    await submitMove(inputValue);
-    refs.moveInput.value = "";
-  } catch {
-    // handled in submitMove
-  }
-});
-
-refs.engineMoveBtn.addEventListener("click", async () => {
-  if (isPlayersTurn()) {
-    alert("It's your move.");
-    return;
-  }
-  try {
-    await submitMove(null, { bypassTurnCheck: true });
-  } catch {
-    // handled in submitMove
   }
 });
 
