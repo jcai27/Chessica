@@ -6,3 +6,4 @@ psycopg2-binary==2.9.9
 redis==5.0.4
 python-chess==1.999
 stockfish==3.28.0
+typing_extensions==4.11.0
