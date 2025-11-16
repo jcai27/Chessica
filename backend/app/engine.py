@@ -26,6 +26,7 @@ DIFFICULTY_SETTINGS: dict[str, dict[str, float | int]] = {
     "grandmaster": {"skill": 20, "elo": 2400, "move_time": 0.6},
     "custom": {"skill": 15, "elo": 2000, "move_time": 0.4},
 }
+ENGINE_MIN_ELO = 1320
 
 
 def _engine_cmd() -> list[str]:
@@ -95,7 +96,7 @@ def pick_engine_move(board: Board, difficulty: str, engine_rating: int) -> tuple
                 {
                     "Skill Level": max(0, min(20, skill)),
                     "UCI_LimitStrength": True,
-                    "UCI_Elo": max(600, min(2850, int(profile["elo"]))),
+                    "UCI_Elo": max(ENGINE_MIN_ELO, min(2850, int(profile["elo"]))),
                 }
             )
         except chess.engine.EngineTerminatedError:
@@ -136,7 +137,13 @@ def mock_exploit_confidence() -> float:
 
 
 def explain_engine_move(
-    board: Board, move_uci: str, eval_cp: int, engine_color: str, player_feedback: str | None = None
+    board: Board,
+    move_uci: str,
+    eval_cp: int,
+    engine_color: str,
+    player_feedback: str | None = None,
+    difficulty: str | None = None,
+    engine_rating: int | None = None,
 ) -> "Explanation":
     from .schemas import Explanation
 
@@ -147,7 +154,19 @@ def explain_engine_move(
     mover_color = snapshot.turn
     analysis_board = snapshot.copy()
     analysis_board.push(move)
-    summary = _position_briefing(analysis_board, eval_cp, engine_color, mover_color, player_feedback)
+    multipv_lines = analyze_position(
+        analysis_board,
+        difficulty or "advanced",
+        engine_rating or DIFFICULTY_SETTINGS.get("advanced", {}).get("elo", 2000),
+    )
+    summary = _coach_mode_summary(
+        analysis_board,
+        eval_cp,
+        engine_color,
+        mover_color,
+        player_feedback,
+        multipv_lines,
+    )
     return Explanation(
         summary=summary,
         objective_cost_cp=0,
@@ -218,7 +237,7 @@ def evaluate_position(board: Board, difficulty: str, engine_rating: int) -> int:
                 {
                     "Skill Level": max(0, min(20, int(profile.get("skill", 15)))),
                     "UCI_LimitStrength": True,
-                    "UCI_Elo": max(600, min(2850, int(profile["elo"]))),
+                    "UCI_Elo": max(ENGINE_MIN_ELO, min(2850, int(profile["elo"]))),
                 }
             )
         except chess.engine.EngineTerminatedError:
@@ -226,6 +245,63 @@ def evaluate_position(board: Board, difficulty: str, engine_rating: int) -> int:
             engine = _get_engine()
         info = engine.analyse(board.raw, limit, info=chess.engine.INFO_SCORE)
     return _score_to_cp(info.get("score"))
+
+
+def analyze_position(
+    board: chess.Board,
+    difficulty: str,
+    engine_rating: int,
+    multipv: int = 3,
+    max_moves: int = 5,
+) -> list[dict[str, object]]:
+    profile = _difficulty_profile(difficulty, engine_rating)
+    think_time = max(0.05, min(settings.engine_move_time_limit, float(profile["move_time"])))
+    limit = chess.engine.Limit(time=think_time)
+    with ENGINE_LOCK:
+        engine = _get_engine()
+        try:
+            engine.configure(
+                {
+                    "Skill Level": max(0, min(20, int(profile.get("skill", 15)))),
+                    "UCI_LimitStrength": True,
+                    "UCI_Elo": max(ENGINE_MIN_ELO, min(2850, int(profile["elo"]))),
+                }
+            )
+        except chess.engine.EngineTerminatedError:
+            _shutdown_engine()
+            engine = _get_engine()
+            engine.configure(
+                {
+                    "Skill Level": max(0, min(20, int(profile.get("skill", 15)))),
+                    "UCI_LimitStrength": True,
+                    "UCI_Elo": max(ENGINE_MIN_ELO, min(2850, int(profile["elo"]))),
+                }
+            )
+        analysis = engine.analyse(
+            board,
+            limit,
+            multipv=max(1, multipv),
+            info=chess.engine.INFO_SCORE | chess.engine.INFO_PV,
+        )
+    if isinstance(analysis, dict):
+        entries = [analysis]
+    else:
+        entries = analysis or []
+    lines: list[dict[str, object]] = []
+    for entry in entries:
+        pv = entry.get("pv")
+        if not pv:
+            continue
+        temp_board = board.copy(stack=True)
+        san_moves: list[str] = []
+        for move in pv[:max_moves]:
+            try:
+                san_moves.append(temp_board.san(move))
+            except ValueError:
+                san_moves.append(move.uci())
+            temp_board.push(move)
+        lines.append({"eval_cp": _score_to_cp(entry.get("score")), "san_line": san_moves})
+    return lines
 
 
 def build_move_insight(
@@ -320,18 +396,17 @@ def _position_briefing(
     engine_color: str,
     mover_color: chess.Color,
     player_feedback: str | None = None,
-) -> str:
+) -> list[str]:
     statements = [
         _material_brief(board),
         _center_control_brief(board),
         _space_activity_brief(board, mover_color),
         _king_safety_brief(board),
         _structural_brief(board),
-        _plan_prompt(board, mover_color),
     ]
     if player_feedback:
         statements.insert(0, player_feedback)
-    return " ".join(part for part in statements if part).strip()
+    return [part for part in statements if part]
 
 
 def _material_brief(board: chess.Board) -> str:
@@ -479,11 +554,95 @@ def _color_name(color: chess.Color) -> str:
     return "White" if color == chess.WHITE else "Black"
 
 
-def _plan_prompt(board: chess.Board, mover_color: chess.Color) -> str:
+def _coach_mode_summary(
+    board: chess.Board,
+    eval_cp: int,
+    engine_color: str,
+    mover_color: chess.Color,
+    player_feedback: str | None = None,
+    candidate_lines: list[dict[str, object]] | None = None,
+) -> str:
+    foundation_points = _position_briefing(board, eval_cp, engine_color, mover_color, player_feedback)
+    snapshot = _feature_snapshot(board)
+    plans = _plan_prompt(board, mover_color)
+    sections: list[str] = []
+    if foundation_points:
+        sections.append("Summary:\n" + "\n".join(f"• {point}" for point in foundation_points))
+    if snapshot["strengths"]:
+        sections.append("Strengths:\n" + "\n".join(f"• {point}" for point in snapshot["strengths"]))
+    if snapshot["weaknesses"]:
+        sections.append("Pressure Points:\n" + "\n".join(f"• {point}" for point in snapshot["weaknesses"]))
+    plan_sentences = [sentence.strip() for sentence in plans if sentence.strip()]
+    if plan_sentences:
+        sections.append("Plans:\n" + "\n".join(f"• {sentence}" for sentence in plan_sentences))
+    if candidate_lines:
+        formatted = [
+            f"• {_format_eval_cp(entry.get('eval_cp', 0))}: {' '.join(entry.get('san_line', []))}"
+            for entry in candidate_lines
+            if entry.get("san_line")
+        ]
+        if formatted:
+            sections.append("Key Lines:\n" + "\n".join(formatted))
+    return "\n\n".join(section for section in sections if section)
+
+
+def _feature_snapshot(board: chess.Board) -> dict[str, list[str]]:
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    totals = _material_totals(board)
+    diff = totals[chess.WHITE] - totals[chess.BLACK]
+    if diff > 120:
+        strengths.append("White holds the extra material; aim for trades.")
+        weaknesses.append("Black must manufacture counterplay to offset the deficit.")
+    elif diff < -120:
+        strengths.append("Black owns material leverage and can press quietly.")
+        weaknesses.append("White needs active pieces to justify the sacrifice.")
+
+    center_counts = _center_control_counts(board)
+    center_diff = center_counts[chess.WHITE] - center_counts[chess.BLACK]
+    if center_diff > 1:
+        strengths.append("White dominates the central squares.")
+        weaknesses.append("Black should look for flank pawn breaks.")
+    elif center_diff < -1:
+        strengths.append("Black’s central grip is restricting White.")
+        weaknesses.append("White must undermine the locked center.")
+
+    advanced = _advanced_piece_counts(board)
+    space_diff = advanced[chess.WHITE] - advanced[chess.BLACK]
+    if space_diff > 1:
+        strengths.append("White pieces enjoy extra space to maneuver.")
+        weaknesses.append("Black's camp is cramped—swap pieces or hit the base pawns.")
+    elif space_diff < -1:
+        strengths.append("Black has the more active forces.")
+        weaknesses.append("White should neutralize the active pieces before expanding.")
+
+    if _has_bishop_pair(board, chess.WHITE) and not _has_bishop_pair(board, chess.BLACK):
+        strengths.append("White’s bishop pair loves open diagonals.")
+        weaknesses.append("Black should keep the position closed.")
+    elif _has_bishop_pair(board, chess.BLACK) and not _has_bishop_pair(board, chess.WHITE):
+        strengths.append("Black’s bishops can take over light and dark squares.")
+        weaknesses.append("White must contest key diagonals.")
+
+    white_passers = _passed_pawns(board, chess.WHITE)
+    black_passers = _passed_pawns(board, chess.BLACK)
+    if white_passers:
+        squares = ", ".join(chess.square_name(sq) for sq in white_passers)
+        strengths.append(f"White has a passer on {squares}; support it with rooks.")
+    if black_passers:
+        squares = ", ".join(chess.square_name(sq) for sq in black_passers)
+        strengths.append(f"Black’s passed pawn on {squares} will dictate the endgame.")
+
+    if not weaknesses:
+        weaknesses.append("Both sides must respect king safety and loose pieces.")
+    return {"strengths": strengths, "weaknesses": weaknesses}
+
+
+def _plan_prompt(board: chess.Board, mover_color: chess.Color) -> list[str]:
     opponent = chess.BLACK if mover_color == chess.WHITE else chess.WHITE
-    mover_plan = _plan_for_color(board, mover_color, opponent)
-    opponent_plan = _plan_for_color(board, opponent, mover_color)
-    return f"{mover_plan} {opponent_plan}".strip()
+    return [
+        _plan_for_color(board, mover_color, opponent),
+        _plan_for_color(board, opponent, mover_color),
+    ]
 
 
 def _plan_for_color(board: chess.Board, color: chess.Color, opponent: chess.Color) -> str:
@@ -509,6 +668,14 @@ def _plan_for_color(board: chess.Board, color: chess.Color, opponent: chess.Colo
     if not tips:
         tips.append("improve the least active piece and coordinate with the rooks.")
     return f"{_color_name(color)} plan: {tips[0]}"
+
+
+def _format_eval_cp(cp: int | float) -> str:
+    try:
+        value = float(cp) / 100
+    except (TypeError, ValueError):
+        return "≈0.00"
+    return f"+{value:.2f}" if value >= 0 else f"{value:.2f}"
 
 
 def _detect_themes(

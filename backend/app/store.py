@@ -26,11 +26,11 @@ from .schemas import (
 
 DEFAULT_FEN = chess.STARTING_FEN
 DIFFICULTY_PRESETS = [
-    {"name": "beginner", "rating": 800, "depth": 1},
-    {"name": "intermediate", "rating": 1200, "depth": 2},
-    {"name": "advanced", "rating": 1600, "depth": 3},
-    {"name": "expert", "rating": 2000, "depth": 4},
-    {"name": "grandmaster", "rating": 2400, "depth": 5},
+    {"name": "beginner", "rating": 1320, "depth": 1},
+    {"name": "intermediate", "rating": 1600, "depth": 2},
+    {"name": "advanced", "rating": 2000, "depth": 3},
+    {"name": "expert", "rating": 2300, "depth": 4},
+    {"name": "grandmaster", "rating": 2600, "depth": 5},
 ]
 DIFFICULTY_MAP = {preset["name"]: preset for preset in DIFFICULTY_PRESETS}
 DEPTH_TO_PRESET = {preset["depth"]: preset for preset in DIFFICULTY_PRESETS}

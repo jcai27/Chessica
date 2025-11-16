@@ -177,7 +177,13 @@ async def make_move(
         )
 
     explanation = engine.explain_engine_move(
-        board_before_engine_move, engine_move, eval_cp, record.engine_color, (player_insight_dict or {}).get("commentary")
+        board_before_engine_move,
+        engine_move,
+        eval_cp,
+        record.engine_color,
+        (player_insight_dict or {}).get("commentary"),
+        record.difficulty,
+        record.engine_rating,
     )
 
     board.apply_uci(engine_move)

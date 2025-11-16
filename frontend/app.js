@@ -527,12 +527,29 @@ refs.board.addEventListener("drop", async (event) => {
     setAction("snapback");
     return;
   }
-  const move = state.chess.moves({ verbose: true }).find((m) => m.from === source && m.to === target);
-  if (!move) {
+  const moves = state.chess.moves({ verbose: true }).filter((m) => m.from === source && m.to === target);
+  if (!moves.length) {
     setAction("snapback");
     return;
   }
-  const uci = move.from + move.to + (move.promotion ? move.promotion : "");
+  let selectedMove = moves[0];
+  if (moves.length > 1 && moves.some((m) => Boolean(m.promotion))) {
+    const availablePromotions = moves
+      .filter((m) => m.promotion)
+      .map((m) => m.promotion)
+      .filter((value, idx, arr) => arr.indexOf(value) === idx);
+    const choice = window
+      .prompt(`Promote to (${availablePromotions.join(", ")}). Use q, r, b, or n.`, availablePromotions.includes("q") ? "q" : availablePromotions[0])
+      ?.toLowerCase();
+    const promotionMove = moves.find((m) => m.promotion === choice);
+    if (choice && promotionMove) {
+      selectedMove = promotionMove;
+    } else if (!choice) {
+      setAction("snapback");
+      return;
+    }
+  }
+  const uci = selectedMove.from + selectedMove.to + (selectedMove.promotion ? selectedMove.promotion : "");
   try {
     await submitMove(uci);
     setAction("move");
