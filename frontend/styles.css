@@ -275,21 +275,6 @@ body {
   padding: 1.25rem;
 }
 
-#refreshInsightBtn {
-  border: none;
-  border-radius: 12px;
-  padding: 0.45rem 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #071125;
-}
-
-#refreshInsightBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .insight-eval {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(8, 14, 35, 0.85);
@@ -318,6 +303,37 @@ body {
   border-radius: 16px;
   padding: 0.9rem 1rem;
   background: rgba(6, 12, 30, 0.7);
+}
+
+.insight-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.insight-actions button {
+  border: none;
+  border-radius: 12px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.insight-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#refreshInsightBtn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #071125;
+}
+
+#coachSummaryBtn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .insight-tabs {

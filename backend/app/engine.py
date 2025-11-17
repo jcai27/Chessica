@@ -152,22 +152,9 @@ def explain_engine_move(
     snapshot = board.raw
     if move not in snapshot.legal_moves:
         raise ValueError(f"Move {move_uci} is not legal in the given position.")
-    mover_color = snapshot.turn
     analysis_board = snapshot.copy()
     analysis_board.push(move)
-    multipv_lines = analyze_position(
-        analysis_board,
-        difficulty or "advanced",
-        engine_rating or DIFFICULTY_SETTINGS.get("advanced", {}).get("elo", 2000),
-    )
-    summary = _coach_mode_summary(
-        analysis_board,
-        eval_cp,
-        engine_color,
-        mover_color,
-        player_feedback,
-        multipv_lines,
-    )
+    summary = f"Eval {_format_eval_cp(eval_cp)} (centipawns)"
     return Explanation(
         summary=summary,
         objective_cost_cp=0,
@@ -764,6 +751,29 @@ def _compose_llm_prompt(sections: dict[str, list[str]]) -> str:
         lines.append("")
     lines.append("Narrative:")
     return "\n".join(lines)
+
+
+def generate_coach_summary(
+    board: Board,
+    eval_cp: int,
+    engine_color: str,
+    player_feedback: str | None = None,
+    difficulty: str | None = None,
+    engine_rating: int | None = None,
+) -> str:
+    candidate_lines = analyze_position(
+        board.raw.copy(stack=True),
+        difficulty or "advanced",
+        engine_rating or DIFFICULTY_SETTINGS.get("advanced", {}).get("elo", 2000),
+    )
+    return _coach_mode_summary(
+        board.raw.copy(stack=True),
+        eval_cp,
+        engine_color,
+        board.raw.turn,
+        player_feedback,
+        candidate_lines,
+    )
 
 
 def _detect_themes(

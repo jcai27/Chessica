@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     engine_move_time_limit: float = 0.6
     coach_llm_url: str | None = None
     coach_llm_api_key: str | None = None
-    coach_llm_model: str = "phi3:mini-instruct"
+    coach_llm_model: str = "mistral:instruct"
 
 
 settings = Settings()

@@ -10,7 +10,7 @@ from ..board import Board
 from .. import engine
 from ..schemas import (
     ClockState,
-    Explanation,
+    CoachSummaryResponse,
     MoveInsight,
     MoveRequest,
     MoveResponse,
@@ -279,3 +279,25 @@ def resign_session(session_id: str) -> SessionResponse:
         raise HTTPException(status_code=404, detail="Session not found") from None
     log_event(session_id, "session_resigned", {"status": record.status})
     return record.to_response()
+
+
+@router.post("/{session_id}/coach", response_model=CoachSummaryResponse)
+async def summarize_position(session_id: str = Path(..., description="Session identifier")) -> CoachSummaryResponse:
+    try:
+        record = store.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found") from None
+    board = Board.from_fen(record.fen)
+    eval_cp = engine.evaluate_position(board, record.difficulty, record.engine_rating)
+    player_feedback = None
+    if record.move_log:
+        player_feedback = record.move_log[-1].get("commentary")
+    summary = engine.generate_coach_summary(
+        board,
+        eval_cp,
+        record.engine_color,
+        player_feedback,
+        record.difficulty,
+        record.engine_rating,
+    )
+    return CoachSummaryResponse(summary=summary)

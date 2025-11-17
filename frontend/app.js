@@ -20,6 +20,9 @@ const state = {
   notationTracker: new Chess(),
   playerColor: "white",
   gameOver: false,
+  latestEvalCp: null,
+  coachSummary: null,
+  coachSummaryLoading: false,
 };
 
 const refs = {
@@ -34,6 +37,7 @@ const refs = {
   analysisMoves: document.getElementById("analysisMoves"),
   sessionStatus: document.getElementById("sessionStatus"),
   refreshInsightBtn: document.getElementById("refreshInsightBtn"),
+  coachSummaryBtn: document.getElementById("coachSummaryBtn"),
   tacticalValue: document.getElementById("tacticalValue"),
   tacticalBar: document.getElementById("tacticalBar"),
   positionalValue: document.getElementById("positionalValue"),
@@ -80,6 +84,42 @@ function describeEval(cp) {
   if (abs < 150) return cp > 0 ? "White edge" : "Black edge";
   if (abs < 300) return cp > 0 ? "White pressing" : "Black pressing";
   return cp > 0 ? "White winning" : "Black winning";
+}
+
+function updateCoachButtonState() {
+  if (!refs.coachSummaryBtn) return;
+  refs.coachSummaryBtn.disabled = !state.sessionId || state.gameOver || state.coachSummaryLoading;
+}
+
+function updateCoachSummaryText(message) {
+  if (!refs.insightSummary) return;
+  if (message) {
+    refs.insightSummary.textContent = message;
+    return;
+  }
+  if (state.coachSummary) {
+    refs.insightSummary.textContent = state.coachSummary;
+    return;
+  }
+  if (state.coachSummaryLoading) {
+    refs.insightSummary.textContent = "Generating coach summary…";
+    return;
+  }
+  const evalText =
+    typeof state.latestEvalCp === "number"
+      ? `Evaluation: ${formatEval(state.latestEvalCp)}. Click "Explain Position" for a narrative.`
+      : 'Click "Explain Position" for a narrative.';
+  refs.insightSummary.textContent = evalText;
+}
+
+function resetCoachSummary(evaluationCp = null) {
+  if (typeof evaluationCp === "number") {
+    state.latestEvalCp = evaluationCp;
+  }
+  state.coachSummary = null;
+  state.coachSummaryLoading = false;
+  updateCoachSummaryText();
+  updateCoachButtonState();
 }
 
 function describeMaterialBalance() {
@@ -168,9 +208,11 @@ function addSanMove(san, color) {
 }
 
 function resetInsights(message = "No moves yet.") {
-  if (refs.insightSummary) {
-    refs.insightSummary.textContent = message;
-  }
+  state.latestEvalCp = null;
+  state.coachSummary = null;
+  state.coachSummaryLoading = false;
+  updateCoachSummaryText(message);
+  updateCoachButtonState();
   if (refs.insightDetails) {
     refs.insightDetails.innerHTML = "<li>Submit a move to see evaluation metrics.</li>";
   }
@@ -187,8 +229,8 @@ function resetInsights(message = "No moves yet.") {
 }
 
 function updateInsightFromResponse(response) {
-  if (!response || !refs.insightSummary) return;
-  refs.insightSummary.textContent = response.explanation.summary;
+  if (!response) return;
+  resetCoachSummary(response.engine_eval_cp);
   const latestInsight = response.latest_insight;
   const verdictBullet = latestInsight
     ? `<li>Move verdict: ${capitalize(latestInsight.verdict)} (${formatEval(latestInsight.delta_cp)})</li>`
@@ -293,6 +335,36 @@ async function ensureEngineOpensIfNeeded() {
   }
 }
 
+async function generateCoachSummary() {
+  if (!state.sessionId || state.coachSummaryLoading) return;
+  state.coachSummaryLoading = true;
+  updateCoachButtonState();
+  updateCoachSummaryText();
+  let errorMessage = null;
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${state.sessionId}/coach`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) {
+      throw new Error(`Coach summary failed (${res.status})`);
+    }
+    const data = await res.json();
+    state.coachSummary = data.summary?.trim() || "";
+    if (!state.coachSummary) {
+      throw new Error("Empty summary");
+    }
+  } catch (error) {
+    log(error.message);
+    state.coachSummary = null;
+    errorMessage = "Unable to generate coach summary right now.";
+  } finally {
+    state.coachSummaryLoading = false;
+    updateCoachButtonState();
+    updateCoachSummaryText(errorMessage || undefined);
+  }
+}
+
 function initInsightTabs() {
   const tabs = document.querySelectorAll(".insight-tab");
   const panes = document.querySelectorAll(".insight-pane");
@@ -318,6 +390,7 @@ async function createSession(payload) {
   }
   const session = await res.json();
   state.sessionId = session.session_id;
+  updateCoachButtonState();
   state.playerColor = session.player_color;
   state.gameOver = false;
   state.chess.load(START_FEN);
@@ -447,6 +520,7 @@ async function submitMove(uciValue, { bypassTurnCheck = false, suppressAlerts = 
   if (response.result) {
     state.gameOver = true;
     refs.sessionStatus.textContent = response.message || `Game over (${response.result})`;
+    updateCoachButtonState();
   }
   return response;
 }
@@ -469,6 +543,7 @@ function connectStream() {
         const message = data.payload?.message || "Game over.";
         refs.sessionStatus.textContent = message;
         log(message);
+        updateCoachButtonState();
       }
     } catch (error) {
       log(`Stream message: ${event.data}`);
@@ -502,6 +577,16 @@ document.getElementById("sessionForm").addEventListener("submit", async (event) 
 if (refs.refreshInsightBtn) {
   refs.refreshInsightBtn.addEventListener("click", () => {
     fetchPositionAnalysis(false);
+  });
+}
+
+if (refs.coachSummaryBtn) {
+  refs.coachSummaryBtn.addEventListener("click", () => {
+    if (!state.sessionId) {
+      alert("Start a session first.");
+      return;
+    }
+    generateCoachSummary();
   });
 }
 

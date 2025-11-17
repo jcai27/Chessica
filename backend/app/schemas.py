@@ -100,6 +100,10 @@ class MoveResponse(BaseModel):
     message: str | None = None
 
 
+class CoachSummaryResponse(BaseModel):
+    summary: str
+
+
 class SessionDetail(SessionResponse):
     fen: str
     clocks: ClockState
