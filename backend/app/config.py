@@ -33,7 +33,7 @@ def _default_stockfish_path() -> str:
 class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     project_name: str = "Chessica API"
-    allow_origins: list[str] = ["http://localhost:4173", "https://chessica-gamma.vercel.app"]
+    allow_origins: list[str] = ["http://localhost:4173", "https://chessica-gamma.vercel.app", "https://chessica.xyz"]
     websocket_url: str = "wss://localhost:8000"
     database_url: str = "sqlite:///../chessica.db"
     redis_url: str | None = None
@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     coach_llm_url: str | None = None
     coach_llm_api_key: str | None = None
     coach_llm_model: str = "mistral:instruct"
+    coach_rate_limit_window: float = 60.0
+    coach_rate_limit_max: int = 10
 
 
 settings = Settings()

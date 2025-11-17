@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import chess
+import time
+from collections import defaultdict
+from typing import DefaultDict, List
 
 from fastapi import APIRouter, HTTPException, Path
 
 from ..board import Board
 from .. import engine
+from ..config import settings
 from ..schemas import (
     ClockState,
     CoachSummaryResponse,
+    Explanation,
     MoveInsight,
     MoveRequest,
     MoveResponse,
@@ -23,6 +28,8 @@ from ..realtime import stream_manager
 from ..telemetry import log_event
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+_coach_rate_usage: DefaultDict[str, List[float]] = defaultdict(list)
 
 
 def _determine_outcome(board: Board, player_color: str) -> tuple[str, str, str]:
@@ -287,17 +294,38 @@ async def summarize_position(session_id: str = Path(..., description="Session id
         record = store.get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found") from None
+    _enforce_coach_rate_limit(session_id)
     board = Board.from_fen(record.fen)
     eval_cp = engine.evaluate_position(board, record.difficulty, record.engine_rating)
     player_feedback = None
     if record.move_log:
         player_feedback = record.move_log[-1].get("commentary")
-    summary = engine.generate_coach_summary(
-        board,
-        eval_cp,
-        record.engine_color,
-        player_feedback,
-        record.difficulty,
-        record.engine_rating,
-    )
+    try:
+        summary = engine.generate_coach_summary(
+            board,
+            eval_cp,
+            record.engine_color,
+            player_feedback,
+            record.difficulty,
+            record.engine_rating,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        log_event(session_id, "coach_summary_failed", {"error": str(exc)})
+        raise HTTPException(status_code=502, detail="Coach summary unavailable.") from exc
+    log_event(session_id, "coach_summary", {"length": len(summary or "")})
     return CoachSummaryResponse(summary=summary)
+
+
+def _enforce_coach_rate_limit(session_id: str) -> None:
+    window = settings.coach_rate_limit_window
+    max_calls = settings.coach_rate_limit_max
+    if not window or not max_calls:
+        return
+    now = time.time()
+    timestamps = _coach_rate_usage[session_id]
+    cutoff = now - window
+    while timestamps and timestamps[0] < cutoff:
+        timestamps.pop(0)
+    if len(timestamps) >= max_calls:
+        raise HTTPException(status_code=429, detail="Too many coach summaries requested. Please wait.")
+    timestamps.append(now)
