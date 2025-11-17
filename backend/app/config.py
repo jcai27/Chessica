@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     engine_default_depth: int = 3
     stockfish_path: str = _default_stockfish_path()
     engine_move_time_limit: float = 0.6
+    coach_llm_url: str | None = None
+    coach_llm_api_key: str | None = None
+    coach_llm_model: str = "phi3:mini-instruct"
 
 
 settings = Settings()

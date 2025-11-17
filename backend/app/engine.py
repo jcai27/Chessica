@@ -8,6 +8,7 @@ import shlex
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 
 import chess
 import chess.engine
@@ -406,7 +407,13 @@ def _position_briefing(
     ]
     if player_feedback:
         statements.insert(0, player_feedback)
-    return [part for part in statements if part]
+    bullets: list[str] = []
+    for statement in statements:
+        if not statement:
+            continue
+        parts = _split_sentences(statement)
+        bullets.extend(parts)
+    return bullets
 
 
 def _material_brief(board: chess.Board) -> str:
@@ -565,25 +572,30 @@ def _coach_mode_summary(
     foundation_points = _position_briefing(board, eval_cp, engine_color, mover_color, player_feedback)
     snapshot = _feature_snapshot(board)
     plans = _plan_prompt(board, mover_color)
-    sections: list[str] = []
-    if foundation_points:
-        sections.append("Summary:\n" + "\n".join(f"• {point}" for point in foundation_points))
-    if snapshot["strengths"]:
-        sections.append("Strengths:\n" + "\n".join(f"• {point}" for point in snapshot["strengths"]))
-    if snapshot["weaknesses"]:
-        sections.append("Pressure Points:\n" + "\n".join(f"• {point}" for point in snapshot["weaknesses"]))
-    plan_sentences = [sentence.strip() for sentence in plans if sentence.strip()]
-    if plan_sentences:
-        sections.append("Plans:\n" + "\n".join(f"• {sentence}" for sentence in plan_sentences))
+    sections_ordered: list[tuple[str, list[str]]] = [
+        ("Summary", foundation_points),
+        ("Strengths", snapshot["strengths"]),
+        ("Pressure Points", snapshot["weaknesses"]),
+        ("Plans", plans),
+    ]
+
     if candidate_lines:
         formatted = [
-            f"• {_format_eval_cp(entry.get('eval_cp', 0))}: {' '.join(entry.get('san_line', []))}"
+            f"{_format_eval_cp(entry.get('eval_cp', 0))}: {' '.join(entry.get('san_line', []))}"
             for entry in candidate_lines
             if entry.get("san_line")
         ]
-        if formatted:
-            sections.append("Key Lines:\n" + "\n".join(formatted))
-    return "\n\n".join(section for section in sections if section)
+        sections_ordered.append(("Key Lines", formatted))
+
+    fallback_blocks = [
+        _format_section(title, items) for title, items in sections_ordered if items and any(item.strip() for item in items)
+    ]
+    fallback_text = "\n\n".join(block for block in fallback_blocks if block)
+    sections_payload = {
+        title.lower().replace(" ", "_"): [item.strip() for item in items if item and item.strip()]
+        for title, items in sections_ordered
+    }
+    return _summarize_with_llm(sections_payload, fallback_text)
 
 
 def _feature_snapshot(board: chess.Board) -> dict[str, list[str]]:
@@ -676,6 +688,82 @@ def _format_eval_cp(cp: int | float) -> str:
     except (TypeError, ValueError):
         return "≈0.00"
     return f"+{value:.2f}" if value >= 0 else f"{value:.2f}"
+
+
+def _split_sentences(text: str) -> list[str]:
+    segments = re.split(r"(?<=[.!?])\s+", text.strip())
+    return [segment.strip() for segment in segments if segment.strip()]
+
+
+def _summarize_with_llm(sections: dict[str, list[str]], fallback: str) -> str:
+    if not settings.coach_llm_url:
+        return fallback
+    try:
+        import httpx
+    except ImportError:
+        return fallback
+
+    prompt = _compose_llm_prompt(sections)
+    payload = {
+        "model": settings.coach_llm_model,
+        "prompt": prompt,
+        "stream": False,
+    }
+    headers = {"Content-Type": "application/json"}
+    if settings.coach_llm_api_key:
+        headers["Authorization"] = f"Bearer {settings.coach_llm_api_key}"
+    try:
+        response = httpx.post(
+            settings.coach_llm_url,
+            json=payload,
+            headers=headers,
+            timeout=8.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        return fallback
+
+    summary = (
+        data.get("response")
+        or data.get("summary")
+        or data.get("content")
+        or data.get("message")
+    )
+    if not summary and isinstance(data.get("choices"), list):
+        summary = data["choices"][0].get("message", {}).get("content")
+    if not summary:
+        return fallback
+    return summary.strip()
+
+
+def _format_section(title: str, items: list[str]) -> str:
+    cleaned = [item.strip() for item in items if item and item.strip()]
+    if not cleaned:
+        return ""
+    bullet_list = "\n".join(f"- {item}" for item in cleaned)
+    return f"{title}:\n{bullet_list}"
+
+
+def _compose_llm_prompt(sections: dict[str, list[str]]) -> str:
+    lines = [
+        "You are an encouraging chess coach.",
+        "Given the following position insights, produce a concise narrative that highlights:",
+        "1. Who stands better and why.",
+        "2. Key strengths/weaknesses.",
+        "3. Practical plans for both sides.",
+        "Keep it under 6 sentences.",
+        "",
+    ]
+    for key, items in sections.items():
+        if not items:
+            continue
+        title = key.replace("_", " ").title()
+        lines.append(f"{title}:")
+        lines.extend(f"- {item}" for item in items)
+        lines.append("")
+    lines.append("Narrative:")
+    return "\n".join(lines)
 
 
 def _detect_themes(
