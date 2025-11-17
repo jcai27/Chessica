@@ -733,23 +733,37 @@ def _format_section(title: str, items: list[str]) -> str:
 
 
 def _compose_llm_prompt(sections: dict[str, list[str]]) -> str:
+    white_points = sections.get("plans", [])
+    strengths = sections.get("strengths", [])
+    weaknesses = sections.get("pressure_points", [])
+    key_lines = sections.get("key_lines", [])
+    summary = sections.get("summary", [])
     lines = [
-        "You are an encouraging chess coach.",
-        "Given the following position insights, produce a concise narrative that highlights:",
-        "1. Who stands better and why.",
-        "2. Key strengths/weaknesses.",
-        "3. Practical plans for both sides.",
-        "Keep it under 6 sentences.",
+        "Act as a concise chess coach. Write exactly three sentences:",
+        "1. What White should aim for overall.",
+        "2. What Black should aim for overall.",
+        "3. What the current player should do immediately.",
+        "Use at most 50 words per sentence.",
         "",
+        "Context:",
     ]
-    for key, items in sections.items():
-        if not items:
-            continue
-        title = key.replace("_", " ").title()
-        lines.append(f"{title}:")
-        lines.extend(f"- {item}" for item in items)
-        lines.append("")
-    lines.append("Narrative:")
+    if summary:
+        lines.append("Summary cues:")
+        lines.extend(f"- {item}" for item in summary)
+    if strengths:
+        lines.append("Strengths:")
+        lines.extend(f"- {item}" for item in strengths)
+    if weaknesses:
+        lines.append("Pressure points:")
+        lines.extend(f"- {item}" for item in weaknesses)
+    if white_points:
+        lines.append("Plans:")
+        lines.extend(f"- {item}" for item in white_points)
+    if key_lines:
+        lines.append("Key lines:")
+        lines.extend(f"- {item}" for item in key_lines)
+    lines.append("")
+    lines.append("Output:")
     return "\n".join(lines)
 
 

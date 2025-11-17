@@ -3,152 +3,46 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chessica Control Room</title>
+    <title>Chessica · Home</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
-    <script type="module" src="https://unpkg.com/chessboard-element?module"></script>
-    <script type="module" src="https://cdn.skypack.dev/chess.js@1.0.0"></script>
   </head>
   <body>
-    <div class="app">
-      <header class="hero">
+    <nav class="top-nav">
+      <div class="brand">
+        <span class="brand-logo">♞</span>
+        <span>Chessica</span>
+      </div>
+      <div class="nav-links">
+        <a href="./index.html" class="active">Home</a>
+        <a href="./online.html">Online (WIP)</a>
+        <a href="./computer.html">Vs Computer</a>
+      </div>
+    </nav>
+    <div class="landing">
+      <header class="hero landing-hero">
         <div class="hero-title">
           <div class="badge">♞</div>
           <div>
-            <h1>Chessica Control Room</h1>
-            <p>Exploit-aware chess sessions with live narration.</p>
+            <h1>Welcome to Chessica</h1>
+            <p>Pick your arena: battle the Chessica engine or test your prep online.</p>
           </div>
         </div>
         <span class="pill">Alpha</span>
       </header>
 
-      <section class="controls card">
-        <form id="sessionForm" class="controls-form">
-          <label class="select-field">
-            <span>Color</span>
-            <select name="color">
-              <option value="auto" selected>Auto</option>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-            </select>
-          </label>
-          <label class="select-field">
-            <span>Exploit Mode</span>
-            <select name="exploit_mode">
-              <option value="auto" selected>Auto</option>
-              <option value="on">On</option>
-              <option value="off">Off</option>
-            </select>
-          </label>
-          <label class="select-field">
-            <span>Difficulty</span>
-            <select name="difficulty" id="difficultySelect">
-              <option value="beginner" data-depth="1" data-rating="1320">Beginner (~1320)</option>
-              <option value="intermediate" data-depth="2" data-rating="1200">Intermediate (~1200)</option>
-              <option value="advanced" data-depth="3" data-rating="1600" selected>Advanced (~1600)</option>
-              <option value="expert" data-depth="4" data-rating="2000">Expert (~2000)</option>
-              <option value="grandmaster" data-depth="5" data-rating="2400">Grandmaster (~2400)</option>
-            </select>
-          </label>
-          <div class="difficulty-indicator">
-            <span id="difficultyNote">Balanced (~1600 Elo, depth 3)</span>
-          </div>
-          <button type="submit">Start Session</button>
-        </form>
+      <section class="cta-grid">
+        <article class="cta-card">
+          <h2>Play vs Computer</h2>
+          <p>Use exploit-aware analysis, live coaching, and precise evaluation breakdowns.</p>
+          <a class="cta-button" href="./computer.html">Launch Control Room</a>
+        </article>
+        <article class="cta-card">
+          <h2>Play Online (WIP)</h2>
+          <p>Queue up for future matchmaking, live spectating, and collaborative prep.</p>
+          <a class="cta-button secondary" href="./online.html">Preview Online Mode</a>
+        </article>
       </section>
-
-      <main class="layout">
-        <section class="card board-card">
-          <div class="card-header">
-            <h2>Live Board</h2>
-            <span>orientation auto-adjusts</span>
-          </div>
-          <div class="board-shell">
-            <chess-board id="board" draggable-pieces coordinates></chess-board>
-          </div>
-        </section>
-
-        <div class="insight-stack">
-          <section class="card tendencies-card">
-            <div class="card-header">
-              <div>
-                <h2>Opponent Tendencies</h2>
-                <span>style, risk & adaptive profile</span>
-              </div>
-              <span class="session-chip" id="sessionStatus">No active session</span>
-            </div>
-            <div class="tendency-grid">
-              <div class="tendency-meter">
-                <div class="meter-label">
-                  <span>Tactical vs positional</span>
-                  <span id="tacticalValue">0%</span>
-                </div>
-                <div class="meter-bar">
-                  <div class="meter-fill" id="tacticalBar"></div>
-                </div>
-                <small id="positionalValue">Positional: 0%</small>
-              </div>
-              <div class="tendency-meter">
-                <div class="meter-label">
-                  <span>Risk appetite</span>
-                  <span id="riskValue">0%</span>
-                </div>
-                <div class="meter-bar">
-                  <div class="meter-fill" id="riskBar"></div>
-                </div>
-                <small>0% safety · 100% chaos</small>
-              </div>
-            </div>
-          </section>
-
-          <section class="card insight-card">
-            <div class="card-header">
-              <div>
-                <h2>Position Intelligence</h2>
-                <span>evaluations, themes & context</span>
-              </div>
-              <div class="insight-actions">
-                <button type="button" id="coachSummaryBtn">Explain Position</button>
-                <button type="button" id="refreshInsightBtn">Refresh insight</button>
-              </div>
-            </div>
-            <div class="insight-eval">
-              <div class="eval-score" id="evalScore">+0.00</div>
-              <span id="evalDescriptor">Awaiting session</span>
-              <p id="positionDescriptor">Start a session to generate a position briefing.</p>
-            </div>
-            <div class="insight-tabs">
-              <button class="insight-tab active" data-insight-tab="narrative">Narrative</button>
-              <button class="insight-tab" data-insight-tab="breakdown">Move Breakdown</button>
-            </div>
-            <div class="insight-panels">
-              <div class="insight-pane active" data-insight-panel="narrative">
-                <div class="insight-section">
-                  <h3>Current Narrative</h3>
-                  <p id="insightSummary">No moves yet.</p>
-                  <ul id="insightDetails" class="insight-details"></ul>
-                </div>
-                <div class="insight-section">
-                  <h3>Key Themes</h3>
-                  <div id="themeTags" class="theme-tags">—</div>
-                </div>
-              </div>
-              <div class="insight-pane" data-insight-panel="breakdown">
-                <div class="insight-section">
-                  <h3>Move List</h3>
-                  <ol id="moveList"></ol>
-                </div>
-                <div class="insight-section">
-                  <h3>Analysis Stream</h3>
-                  <ul id="analysisMoves" class="analysis-moves"></ul>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </main>
     </div>
-
-    <script type="module" src="./app.js"></script>
   </body>
 </html>
