@@ -51,6 +51,25 @@ function log(message) {
   console.info(`[Chessica] ${message}`);
 }
 
+function setInsightSummaryContent(text) {
+  if (!refs.insightSummary) return;
+  refs.insightSummary.innerHTML = "";
+  if (!text) return;
+  const lines = text.split(/\n/);
+  lines.forEach((line, idx) => {
+    if (!line.trim()) {
+      refs.insightSummary.appendChild(document.createElement("br"));
+      return;
+    }
+    const span = document.createElement("span");
+    span.textContent = line;
+    refs.insightSummary.appendChild(span);
+    if (idx < lines.length - 1) {
+      refs.insightSummary.appendChild(document.createElement("br"));
+    }
+  });
+}
+
 function updateDifficultyNote() {
   if (!refs.difficultySelect || !refs.difficultyNote) return;
   const option = refs.difficultySelect.selectedOptions[0];
@@ -92,24 +111,23 @@ function updateCoachButtonState() {
 }
 
 function updateCoachSummaryText(message) {
-  if (!refs.insightSummary) return;
   if (message) {
-    refs.insightSummary.textContent = message;
+    setInsightSummaryContent(message);
     return;
   }
   if (state.coachSummary) {
-    refs.insightSummary.textContent = state.coachSummary;
+    setInsightSummaryContent(state.coachSummary);
     return;
   }
   if (state.coachSummaryLoading) {
-    refs.insightSummary.textContent = "Generating coach summary…";
+    setInsightSummaryContent("Generating coach summary…");
     return;
   }
   const evalText =
     typeof state.latestEvalCp === "number"
       ? `Evaluation: ${formatEval(state.latestEvalCp)}. Click "Explain Position" for a narrative.`
       : 'Click "Explain Position" for a narrative.';
-  refs.insightSummary.textContent = evalText;
+  setInsightSummaryContent(evalText);
 }
 
 function resetCoachSummary(evaluationCp = null) {
