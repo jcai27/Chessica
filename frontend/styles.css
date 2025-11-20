@@ -1,16 +1,22 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
 :root {
   color-scheme: dark;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --bg: #050c1e;
-  --panel: rgba(10, 16, 38, 0.92);
-  --panel-soft: rgba(12, 20, 44, 0.86);
-  --border: rgba(94, 112, 180, 0.4);
-  --accent: #8b5cf6;
-  --accent-2: #34d399;
+  font-family: "Space Grotesk", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --bg: #050b16;
+  --panel: rgba(12, 16, 28, 0.96);
+  --panel-soft: rgba(16, 22, 40, 0.92);
+  --panel-strong: rgba(18, 26, 46, 0.98);
+  --border: rgba(130, 150, 210, 0.3);
+  --accent: #7dd3fc;
+  --accent-2: #a855f7;
+  --success: #34d399;
+  --warning: #f59e0b;
   --text: #f7f8ff;
-  --muted: #96a5c7;
-  --board-min: 320px;
-  --board-max: 640px;
+  --muted: #98a4c7;
+  --muted-2: #7083ad;
+  --shadow: 0 18px 55px rgba(0, 0, 0, 0.55);
+  --panel-radius: 20px;
 }
 
 *,
@@ -22,9 +28,11 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 15% 20%, rgba(52, 211, 153, 0.15), transparent 45%),
-    radial-gradient(circle at 85% 5%, rgba(139, 92, 246, 0.18), transparent 45%), var(--bg);
+  background: radial-gradient(circle at 12% 18%, rgba(125, 211, 252, 0.12), transparent 38%),
+    radial-gradient(circle at 88% 8%, rgba(168, 85, 247, 0.14), transparent 45%),
+    radial-gradient(circle at 45% 70%, rgba(52, 211, 153, 0.08), transparent 55%), var(--bg);
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .top-nav {
@@ -34,6 +42,7 @@ body {
   padding: 0.85rem 2rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(5, 12, 30, 0.85);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
 .brand {
@@ -71,6 +80,45 @@ body {
 .nav-links a:hover {
   color: var(--text);
   border-bottom-color: var(--accent-2);
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+}
+
+button {
+  border: none;
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #051020;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.35);
+}
+
+button:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+button.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+button.secondary:hover {
+  border-color: rgba(125, 211, 252, 0.5);
 }
 
 .landing {
@@ -211,10 +259,11 @@ body {
 }
 
 .card {
-  background: var(--panel);
-  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+    var(--panel);
+  border-radius: var(--panel-radius);
   border: 1px solid var(--border);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
 }
 
 .controls {
@@ -299,7 +348,7 @@ body {
 .layout {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: minmax(360px, 1.6fr) minmax(320px, 1fr);
   gap: 1.25rem;
   align-items: stretch;
 }
@@ -347,21 +396,23 @@ body {
   aspect-ratio: 1 / 1;
   padding: 0.65rem;
   border-radius: 24px;
-  border: 1px solid var(--border);
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(52, 211, 153, 0.08));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), rgba(10, 18, 42, 0.82)),
+    radial-gradient(circle at 20% 15%, rgba(125, 211, 252, 0.1), transparent 60%),
+    radial-gradient(circle at 80% 10%, rgba(168, 85, 247, 0.12), transparent 55%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 70px rgba(0, 0, 0, 0.5);
 }
 
 .board-shell chess-board {
   width: 100%;
   height: 100%;
   border-radius: 18px;
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --light-square-color: #152a4c;
-  --dark-square-color: #0b1a32;
-  --border-color: rgba(139, 92, 246, 0.6);
-  --highlight-color: rgba(52, 211, 153, 0.4);
-  --notation-color: #b7c6eb;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --light-square-color: #15263f;
+  --dark-square-color: #0b1527;
+  --border-color: rgba(125, 211, 252, 0.6);
+  --highlight-color: rgba(52, 211, 153, 0.5);
+  --notation-color: #c1cff0;
 }
 
 .clock-stack {
@@ -391,6 +442,14 @@ body {
   border-color: rgba(52, 211, 153, 0.6);
   box-shadow: 0 10px 30px rgba(52, 211, 153, 0.15);
   transform: translateY(-1px);
+}
+
+.clock-value-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-end;
+  min-width: 120px;
 }
 
 .clock-meta {
@@ -426,6 +485,24 @@ body {
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text);
+}
+
+.clock-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.clock-progress span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left center;
+  transition: transform 0.2s ease;
 }
 
 .share-card {
@@ -587,6 +664,15 @@ body {
   justify-content: flex-end;
 }
 
+.insight-actions input[type="text"] {
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(9, 14, 32, 0.8);
+  color: var(--text);
+  font-weight: 600;
+}
+
 .insight-actions button {
   border: none;
   border-radius: 12px;
@@ -713,6 +799,21 @@ body {
   margin: 0.35rem 0 0;
   color: var(--text);
   font-size: 0.9rem;
+}
+
+.empty-state {
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.empty-state .emoji {
+  font-size: 1.4rem;
 }
 
 .replay-layout {

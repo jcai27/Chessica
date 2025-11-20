@@ -56,8 +56,8 @@
             <span>Increment (ms)</span>
             <input type="number" name="increment_ms" value="2000" min="0" step="1000" />
           </label>
-          <button type="submit" id="queueBtn">Join Queue</button>
-          <button type="button" id="leaveBtn">Leave Queue</button>
+          <button type="submit" id="queueBtn">🚀 Join Queue</button>
+          <button type="button" id="leaveBtn" class="secondary">✖ Leave Queue</button>
         </form>
         <div class="difficulty-indicator" id="queueStatus">Not queued.</div>
       </section>
@@ -81,14 +81,20 @@
                   <span class="clock-dot clock-dot--black"></span>
                   <span class="clock-label" id="blackClockLabel">Black</span>
                 </div>
-                <span class="clock-value" id="blackClock">05:00</span>
+                <div class="clock-value-wrap">
+                  <span class="clock-value" id="blackClock">05:00</span>
+                  <div class="clock-progress"><span id="blackClockProgress"></span></div>
+                </div>
               </div>
               <div class="clock-tile player" id="whiteClockTile">
                 <div class="clock-meta">
                   <span class="clock-dot clock-dot--white"></span>
                   <span class="clock-label" id="whiteClockLabel">White</span>
                 </div>
-                <span class="clock-value" id="whiteClock">05:00</span>
+                <div class="clock-value-wrap">
+                  <span class="clock-value" id="whiteClock">05:00</span>
+                  <div class="clock-progress"><span id="whiteClockProgress"></span></div>
+                </div>
               </div>
             </div>
           </div>
@@ -103,13 +109,20 @@
               </div>
               <div class="insight-actions">
                 <input type="text" id="sessionInput" placeholder="session id (if known)" />
-                <button type="button" id="loadSessionBtn">Load Session</button>
-                <button type="button" id="resignBtn">Resign</button>
-                <button type="button" id="drawBtn">Offer Draw</button>
-                <button type="button" id="abortBtn">Abort</button>
+                <button type="button" id="loadSessionBtn" class="secondary">↻ Load Session</button>
+                <button type="button" id="resignBtn" class="secondary">🏳️ Resign</button>
+                <button type="button" id="drawBtn" class="secondary">🤝 Offer Draw</button>
+                <button type="button" id="abortBtn" class="secondary">⏹ Abort</button>
               </div>
             </div>
             <ol id="onlineMoveList"></ol>
+            <div class="empty-state" id="moveEmptyState">
+              <span class="emoji">📄</span>
+              <div>
+                <strong>No moves yet.</strong>
+                <div>Make the first move to start the log.</div>
+              </div>
+            </div>
           </section>
 
           <section class="card insight-card">
@@ -122,6 +135,13 @@
             <div class="insight-section">
               <h3>Messages</h3>
               <ul id="onlineMessages" class="analysis-moves"></ul>
+              <div class="empty-state" id="messagesEmptyState">
+                <span class="emoji">💬</span>
+                <div>
+                  <strong>Waiting for updates...</strong>
+                  <div>Matchmaking and stream events will show up here.</div>
+                </div>
+              </div>
             </div>
           </section>
         </div>

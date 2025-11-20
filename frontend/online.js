@@ -28,6 +28,10 @@ const refs = {
   blackClockLabel: document.getElementById("blackClockLabel"),
   whiteClockTile: document.getElementById("whiteClockTile"),
   blackClockTile: document.getElementById("blackClockTile"),
+  whiteClockProgress: document.getElementById("whiteClockProgress"),
+  blackClockProgress: document.getElementById("blackClockProgress"),
+  moveEmptyState: document.getElementById("moveEmptyState"),
+  messagesEmptyState: document.getElementById("messagesEmptyState"),
 };
 
 const state = {
@@ -36,6 +40,7 @@ const state = {
   playerId: null,
   sessionId: null,
   playerColor: "white",
+  initialMs: 300000,
   chess: new Chess(),
   movePairs: [],
   socket: null,
@@ -60,6 +65,14 @@ function setPlayerColor(text) {
   if (refs.playerColorDisplay) refs.playerColorDisplay.textContent = text || "";
 }
 
+function hideEmptyState(el) {
+  if (el) el.style.display = "none";
+}
+
+function showEmptyState(el) {
+  if (el) el.style.display = "flex";
+}
+
 function updateClockLabels() {
   if (!refs.whiteClockLabel || !refs.blackClockLabel) return;
   if (state.playerColor === "white") {
@@ -76,6 +89,7 @@ function logMessage(text) {
   const li = document.createElement("li");
   li.textContent = text;
   refs.messages.prepend(li);
+  hideEmptyState(refs.messagesEmptyState);
 }
 
 function formatMs(ms) {
@@ -93,8 +107,13 @@ function formatMs(ms) {
 
 function updateClocks(clocks) {
   if (!clocks) return;
+  if (!state.initialMs) {
+    state.initialMs = Math.max(clocks.player_ms ?? 0, clocks.engine_ms ?? 0, 300000);
+  }
   if (refs.whiteClock) refs.whiteClock.textContent = formatMs(clocks.player_ms ?? 0);
   if (refs.blackClock) refs.blackClock.textContent = formatMs(clocks.engine_ms ?? 0);
+  setClockProgress("white", clocks.player_ms ?? 0);
+  setClockProgress("black", clocks.engine_ms ?? 0);
 }
 
 function updateTurnIndicator() {
@@ -107,6 +126,14 @@ function updateTurnIndicator() {
   }
 }
 
+function setClockProgress(color, remainingMs) {
+  const progressEl = color === "white" ? refs.whiteClockProgress : refs.blackClockProgress;
+  if (!progressEl) return;
+  const base = state.initialMs || Math.max(remainingMs, 1);
+  const ratio = Math.max(0, Math.min(1, remainingMs / base));
+  progressEl.style.transform = `scaleX(${ratio})`;
+}
+
 function renderBoard() {
   if (!refs.board) return;
   refs.board.setAttribute("position", state.chess.fen());
@@ -117,15 +144,17 @@ function renderBoard() {
 function resetMoveList() {
   state.movePairs = [];
   if (refs.moveList) refs.moveList.innerHTML = "";
+  showEmptyState(refs.moveEmptyState);
 }
 
 function renderMoveList() {
   if (!refs.moveList) return;
   refs.moveList.innerHTML = "";
   if (!state.movePairs.length) {
-    refs.moveList.innerHTML = "<li>No moves yet.</li>";
+    showEmptyState(refs.moveEmptyState);
     return;
   }
+  hideEmptyState(refs.moveEmptyState);
   state.movePairs.forEach((pair) => {
     const li = document.createElement("li");
     li.textContent = `${pair.number}. ${pair.white || "..."} ${pair.black || "..."}`;
@@ -219,6 +248,7 @@ async function loadSessionDetail(sessionId = null) {
   const detail = await res.json();
   state.sessionId = detail.session_id;
   state.playerColor = detail.player_white_id === state.playerId ? "white" : detail.player_black_id === state.playerId ? "black" : state.playerColor;
+  state.initialMs = state.initialMs || Math.max(detail?.clocks?.player_ms ?? 0, detail?.clocks?.engine_ms ?? 0, 300000);
   state.chess.load(detail.fen);
   resetMoveList();
   (detail.moves || []).forEach((uci) => applyUci(uci));
@@ -395,6 +425,7 @@ if (refs.queueForm) {
       return;
     }
     state.playerId = player_id;
+    state.initialMs = initial_ms || state.initialMs;
     setStatus("Joining queue...");
     try {
       const data = await joinQueue({
