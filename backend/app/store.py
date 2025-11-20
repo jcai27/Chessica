@@ -78,8 +78,8 @@ class SessionRecord:
     created_at: datetime
     updated_at: datetime
     fen: str
-    initial_fen: str = DEFAULT_FEN
     clocks: ClockState
+    initial_fen: str = DEFAULT_FEN
     move_log: List[Dict[str, Any]] = field(default_factory=list)
     opponent_profile: OpponentProfile = field(
         default_factory=lambda: OpponentProfile(
