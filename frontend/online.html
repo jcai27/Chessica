@@ -3,9 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chessica · Online Mode (WIP)</title>
+    <title>Chessica | Online Mode</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="https://unpkg.com/chessboard-element?module"></script>
+    <script type="module" src="https://cdn.skypack.dev/chess.js@1.0.0"></script>
   </head>
   <body>
     <nav class="top-nav">
@@ -15,39 +17,101 @@
       </div>
       <div class="nav-links">
         <a href="./index.html">Home</a>
-        <a href="./online.html" class="active">Online (WIP)</a>
+        <a href="./online.html" class="active">Online</a>
         <a href="./computer.html">Vs Computer</a>
+        <a href="./replay.html">Replay</a>
       </div>
     </nav>
-    <div class="landing online-landing">
-      <header class="hero landing-hero">
+    <div class="app">
+      <header class="hero">
         <div class="hero-title">
           <div class="badge">⚡</div>
           <div>
-            <h1>Online Mode · Work in Progress</h1>
-            <p>Matchmaking, shared analysis, and live commentary are on the way.</p>
+            <h1>Online Play</h1>
+            <p>Simple matchmaking with shared analysis once matched.</p>
           </div>
         </div>
-        <span class="pill">Coming Soon</span>
+        <span class="pill">Beta</span>
       </header>
 
-      <section class="wip-grid">
-        <article class="wip-card">
-          <h2>Match Queue</h2>
-          <p>We’re building pooled time controls so you can hop into a game with a single click.</p>
-          <div class="wip-status">Status: designing lobby + Elo pools</div>
-        </article>
-        <article class="wip-card">
-          <h2>Shared Board & Coach</h2>
-          <p>Watch the same evaluation feed during the game, and toggle coach commentary together.</p>
-          <div class="wip-status">Status: prototyping synchronised boards</div>
-        </article>
-        <article class="wip-card">
-          <h2>Want Early Access?</h2>
-          <p>Email <a href="mailto:hello@chessica.app">hello@chessica.app</a> with “Online Beta” if you want to test.</p>
-          <div class="wip-status">Status: waitlist forming</div>
-        </article>
+      <section class="card controls">
+        <form id="queueForm" class="controls-form">
+          <label class="select-field">
+            <span>Player ID</span>
+            <input type="text" name="player_id" placeholder="your-handle" required />
+          </label>
+          <label class="select-field">
+            <span>Color</span>
+            <select name="color">
+              <option value="auto" selected>Auto</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+            </select>
+          </label>
+          <label class="select-field">
+            <span>Initial (ms)</span>
+            <input type="number" name="initial_ms" value="300000" min="60000" step="60000" />
+          </label>
+          <label class="select-field">
+            <span>Increment (ms)</span>
+            <input type="number" name="increment_ms" value="2000" min="0" step="1000" />
+          </label>
+          <button type="submit" id="queueBtn">Join Queue</button>
+          <button type="button" id="leaveBtn">Leave Queue</button>
+        </form>
+        <div class="difficulty-indicator" id="queueStatus">Not queued.</div>
+      </section>
+
+      <section class="layout">
+        <div class="card board-card">
+          <div class="card-header">
+            <h2>Live Board</h2>
+            <span id="matchInfo">No match yet.</span>
+          </div>
+          <div class="board-shell">
+            <chess-board id="onlineBoard" draggable-pieces coordinates></chess-board>
+          </div>
+          <div class="insight-section">
+            <h3>Session</h3>
+            <p id="sessionIdDisplay"></p>
+            <p id="playerColorDisplay"></p>
+            <p>Clocks: <span id="whiteClock">05:00</span> | <span id="blackClock">05:00</span></p>
+          </div>
+        </div>
+
+        <div class="insight-stack">
+          <section class="card insight-card">
+            <div class="card-header">
+              <div>
+                <h2>Move Log</h2>
+                <span>both players</span>
+              </div>
+              <div class="insight-actions">
+                <input type="text" id="sessionInput" placeholder="session id (if known)" />
+                <button type="button" id="loadSessionBtn">Load Session</button>
+                <button type="button" id="resignBtn">Resign</button>
+                <button type="button" id="drawBtn">Offer Draw</button>
+                <button type="button" id="abortBtn">Abort</button>
+              </div>
+            </div>
+            <ol id="onlineMoveList"></ol>
+          </section>
+
+          <section class="card insight-card">
+            <div class="card-header">
+              <div>
+                <h2>Status</h2>
+                <span>stream + matchmaking</span>
+              </div>
+            </div>
+            <div class="insight-section">
+              <h3>Messages</h3>
+              <ul id="onlineMessages" class="analysis-moves"></ul>
+            </div>
+          </section>
+        </div>
       </section>
     </div>
+    <script type="module" src="./online.js"></script>
   </body>
 </html>

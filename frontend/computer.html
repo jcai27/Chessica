@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chessica · Play vs Computer</title>
+    <title>Chessica | Play vs Computer</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="https://unpkg.com/chessboard-element?module"></script>
@@ -19,6 +19,7 @@
         <a href="./index.html">Home</a>
         <a href="./online.html">Online (WIP)</a>
         <a href="./computer.html" class="active">Vs Computer</a>
+        <a href="./replay.html">Replay</a>
       </div>
     </nav>
     <div class="app">
@@ -77,6 +78,22 @@
           <div class="board-shell">
             <chess-board id="board" draggable-pieces coordinates></chess-board>
           </div>
+          <div class="share-card">
+            <div class="share-header">
+              <div>
+                <h3>Share & Replay</h3>
+                <span id="shareHint">Available after the game ends.</span>
+              </div>
+            </div>
+            <div class="share-actions">
+              <input type="text" id="shareLink" class="share-link" value="Start a session to unlock." readonly />
+              <div class="share-buttons">
+                <button type="button" id="copyLinkBtn">Copy link</button>
+                <button type="button" id="openReplayBtn">Open replay</button>
+                <button type="button" id="downloadPgnBtn">Download PGN</button>
+              </div>
+            </div>
+          </div>
         </section>
 
         <div class="insight-stack">
@@ -107,7 +124,7 @@
                 <div class="meter-bar">
                   <div class="meter-fill" id="riskBar"></div>
                 </div>
-                <small>0% safety · 100% chaos</small>
+                <small>0% safety | 100% chaos</small>
               </div>
             </div>
           </section>
@@ -141,7 +158,7 @@
                 </div>
                 <div class="insight-section">
                   <h3>Key Themes</h3>
-                  <div id="themeTags" class="theme-tags">—</div>
+                  <div id="themeTags" class="theme-tags">No motifs yet.</div>
                 </div>
               </div>
               <div class="insight-pane" data-insight-panel="breakdown">

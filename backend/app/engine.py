@@ -603,23 +603,23 @@ def _feature_snapshot(board: chess.Board) -> dict[str, list[str]]:
         strengths.append("White dominates the central squares.")
         weaknesses.append("Black should look for flank pawn breaks.")
     elif center_diff < -1:
-        strengths.append("Black’s central grip is restricting White.")
+        strengths.append("Black's central grip is restricting White.")
         weaknesses.append("White must undermine the locked center.")
 
     advanced = _advanced_piece_counts(board)
     space_diff = advanced[chess.WHITE] - advanced[chess.BLACK]
     if space_diff > 1:
         strengths.append("White pieces enjoy extra space to maneuver.")
-        weaknesses.append("Black's camp is cramped—swap pieces or hit the base pawns.")
+        weaknesses.append("Black's camp is cramped; swap pieces or hit the base pawns.")
     elif space_diff < -1:
         strengths.append("Black has the more active forces.")
         weaknesses.append("White should neutralize the active pieces before expanding.")
 
     if _has_bishop_pair(board, chess.WHITE) and not _has_bishop_pair(board, chess.BLACK):
-        strengths.append("White’s bishop pair loves open diagonals.")
+        strengths.append("White's bishop pair loves open diagonals.")
         weaknesses.append("Black should keep the position closed.")
     elif _has_bishop_pair(board, chess.BLACK) and not _has_bishop_pair(board, chess.WHITE):
-        strengths.append("Black’s bishops can take over light and dark squares.")
+        strengths.append("Black's bishops can take over light and dark squares.")
         weaknesses.append("White must contest key diagonals.")
 
     white_passers = _passed_pawns(board, chess.WHITE)
@@ -629,7 +629,7 @@ def _feature_snapshot(board: chess.Board) -> dict[str, list[str]]:
         strengths.append(f"White has a passer on {squares}; support it with rooks.")
     if black_passers:
         squares = ", ".join(chess.square_name(sq) for sq in black_passers)
-        strengths.append(f"Black’s passed pawn on {squares} will dictate the endgame.")
+        strengths.append(f"Black's passed pawn on {squares} will dictate the endgame.")
 
     if not weaknesses:
         weaknesses.append("Both sides must respect king safety and loose pieces.")
@@ -673,7 +673,7 @@ def _format_eval_cp(cp: int | float) -> str:
     try:
         value = float(cp) / 100
     except (TypeError, ValueError):
-        return "≈0.00"
+        return "~0.00"
     return f"+{value:.2f}" if value >= 0 else f"{value:.2f}"
 
 

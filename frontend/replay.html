@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chessica | Replay</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="https://unpkg.com/chessboard-element?module"></script>
+    <script type="module" src="https://cdn.skypack.dev/chess.js@1.0.0"></script>
+  </head>
+  <body>
+    <nav class="top-nav">
+      <div class="brand">
+        <span class="brand-logo">♞</span>
+        <span>Chessica</span>
+      </div>
+      <div class="nav-links">
+        <a href="./index.html">Home</a>
+        <a href="./online.html">Online (WIP)</a>
+        <a href="./computer.html">Vs Computer</a>
+        <a href="./replay.html" class="active">Replay</a>
+      </div>
+    </nav>
+    <div class="app">
+      <header class="hero">
+        <div class="hero-title">
+          <div class="badge">↺</div>
+          <div>
+            <h1>Game Replay</h1>
+            <p>Step through any finished session, share a link, or export PGN.</p>
+          </div>
+        </div>
+        <span class="pill">Shareable</span>
+      </header>
+
+      <section class="card controls">
+        <form id="replayForm" class="controls-form">
+          <label class="select-field">
+            <span>Session ID</span>
+            <input type="text" id="replaySessionInput" name="session" placeholder="sess_xxx" required />
+          </label>
+          <button type="submit">Load Replay</button>
+        </form>
+        <div class="difficulty-indicator" id="replayStatus">Paste a session id to begin.</div>
+      </section>
+
+      <main class="replay-layout">
+        <section class="card board-card">
+          <div class="card-header">
+            <h2>Replay Board</h2>
+            <span id="replayMeta">No game loaded.</span>
+          </div>
+          <div class="board-shell">
+            <chess-board id="replayBoard" coordinates></chess-board>
+          </div>
+          <div class="replay-controls">
+            <button type="button" data-step="start">⏮ Start</button>
+            <button type="button" data-step="prev">◀ Prev</button>
+            <button type="button" data-step="next">Next ▶</button>
+            <button type="button" data-step="end">⏭ End</button>
+          </div>
+          <div class="replay-meta">
+            <span id="replayProgress">Move 0/0</span>
+            <div class="share-buttons">
+              <button type="button" id="replayCopyBtn" disabled>Copy link</button>
+              <button type="button" id="replayDownloadBtn" disabled>Download PGN</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card insight-card">
+          <div class="card-header">
+            <div>
+              <h2>Move List</h2>
+              <span>tap a move to jump</span>
+            </div>
+          </div>
+          <div class="insight-section">
+            <div id="replayMoves" class="replay-move-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./replay.js"></script>
+  </body>
+</html>

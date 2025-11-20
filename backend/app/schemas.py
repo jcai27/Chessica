@@ -48,6 +48,7 @@ class MoveRequest(BaseModel):
     uci: Optional[str] = None
     client_ts: datetime
     clock: ClockState
+    player_id: Optional[str] = None
     telemetry: dict | None = None
 
 
@@ -104,12 +105,35 @@ class CoachSummaryResponse(BaseModel):
     summary: str
 
 
+class ReplayMove(BaseModel):
+    ply: int
+    side: Literal["player", "engine", "white", "black"]
+    san: str
+    uci: str
+
+
+class ReplayResponse(BaseModel):
+    session_id: str
+    player_color: Literal["white", "black"]
+    engine_color: Literal["white", "black"]
+    status: Literal["active", "completed", "abandoned"]
+    result: Literal["checkmate", "stalemate", "resigned"] | None = None
+    winner: Literal["player", "engine", "draw"] | None = None
+    initial_fen: str
+    moves: list[ReplayMove]
+    created_at: datetime
+    updated_at: datetime
+
+
 class SessionDetail(SessionResponse):
     fen: str
     clocks: ClockState
     moves: list[str]
     history: list[MoveInsight] = []
     opponent_profile: OpponentProfile
+    is_multiplayer: bool = False
+    player_white_id: Optional[str] = None
+    player_black_id: Optional[str] = None
 
 
 class AnalysisMove(BaseModel):
@@ -132,6 +156,57 @@ class AnalysisResponse(BaseModel):
     session_id: str
     moves: list[AnalysisMove]
     summary: AnalysisSummary
+
+
+class MultiplayerSessionCreateRequest(BaseModel):
+    player_white_id: Optional[str] = None
+    player_black_id: Optional[str] = None
+    time_control: TimeControl
+    color: Literal["auto", "white", "black"] = "auto"
+    seed_fen: Optional[str] = None
+
+
+class MultiplayerSessionResponse(BaseModel):
+    session_id: str
+    player_white_id: Optional[str] = None
+    player_black_id: Optional[str] = None
+    status: Literal["active", "completed", "abandoned"]
+    fen: str
+    clocks: ClockState
+    created_at: datetime
+    updated_at: datetime
+
+
+class MultiplayerMoveRequest(BaseModel):
+    uci: str
+    player_id: str
+    client_ts: datetime
+    clock: ClockState
+
+
+class MultiplayerMoveResponse(BaseModel):
+    move_uci: str
+    eval_cp: int
+    game_state: GameState
+    latest_insight: MoveInsight | None = None
+    result: Literal["checkmate", "stalemate", "resigned"] | None = None
+    winner: Literal["white", "black", "draw"] | None = None
+    message: str | None = None
+    clocks: ClockState | None = None
+
+
+class QueueJoinRequest(BaseModel):
+    player_id: str
+    time_control: TimeControl
+    color: Literal["auto", "white", "black"] = "auto"
+
+
+class QueueStatusResponse(BaseModel):
+    status: Literal["queued", "matched", "none"]
+    session_id: Optional[str] = None
+    player_color: Optional[Literal["white", "black"]] = None
+    opponent_id: Optional[str] = None
+    message: Optional[str] = None
 
 
 class UserResponse(BaseModel):

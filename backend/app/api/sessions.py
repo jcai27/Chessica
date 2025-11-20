@@ -8,6 +8,7 @@ from collections import defaultdict
 from typing import DefaultDict, List
 
 from fastapi import APIRouter, HTTPException, Path
+from fastapi.responses import Response
 
 from ..board import Board
 from .. import engine
@@ -22,10 +23,13 @@ from ..schemas import (
     SessionCreateRequest,
     SessionDetail,
     SessionResponse,
+    ReplayResponse,
+    ReplayMove,
 )
-from ..store import store
+from ..store import store, SessionRecord
 from ..realtime import stream_manager
 from ..telemetry import log_event
+import chess.pgn
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -51,6 +55,57 @@ async def _broadcast_game_over(session_id: str, payload: dict) -> None:
     log_event(session_id, "game_over", payload)
 
 
+def _ordered_move_log(entries: list[dict]) -> list[dict]:
+    indexed = []
+    for idx, entry in enumerate(entries):
+        ply = entry.get("ply", idx + 1)
+        indexed.append((ply, idx, entry))
+    indexed.sort(key=lambda item: (item[0], item[1]))
+    return [entry for _, _, entry in indexed]
+
+
+def _pgn_result_token(record: SessionRecord) -> str:
+    if record.winner == "draw" or record.result == "stalemate":
+        return "1/2-1/2"
+    if record.winner == "player":
+        return "1-0" if record.player_color == "white" else "0-1"
+    if record.winner == "engine":
+        return "0-1" if record.player_color == "white" else "1-0"
+    return "*"
+
+
+def _build_pgn(record: SessionRecord) -> str:
+    game = chess.pgn.Game()
+    white_name = "You" if record.player_color == "white" else "Chessica Engine"
+    black_name = "Chessica Engine" if record.player_color == "white" else "You"
+    game.headers["Event"] = "Chessica"
+    game.headers["Site"] = "Chessica"
+    game.headers["Date"] = record.created_at.strftime("%Y.%m.%d")
+    game.headers["Round"] = "-"
+    game.headers["White"] = white_name
+    game.headers["Black"] = black_name
+    game.headers["Result"] = _pgn_result_token(record)
+    initial_fen = record.initial_fen or chess.STARTING_FEN
+    if initial_fen != chess.STARTING_FEN:
+        game.headers["SetUp"] = "1"
+        game.headers["FEN"] = initial_fen
+        game.setup(chess.Board(initial_fen))
+    board = chess.Board(initial_fen)
+    node = game
+    uci_moves = [entry.get("uci", "") for entry in _ordered_move_log(record.move_log) if entry.get("uci")]
+    for uci in uci_moves:
+        try:
+            move_obj = chess.Move.from_uci(uci)
+        except ValueError:
+            break
+        if move_obj not in board.legal_moves:
+            break
+        node = node.add_variation(move_obj)
+        board.push(move_obj)
+    exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=True)
+    return game.accept(exporter)
+
+
 @router.post("", response_model=SessionResponse, status_code=201)
 def create_session(payload: SessionCreateRequest) -> SessionResponse:
     record = store.create_session(payload)
@@ -64,6 +119,48 @@ def get_session(session_id: str = Path(..., description="Session identifier")) -
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found") from None
     return record.to_detail()
+
+
+@router.get("/{session_id}/pgn")
+def export_pgn(session_id: str = Path(..., description="Session identifier")) -> Response:
+    try:
+        record = store.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found") from None
+    pgn = _build_pgn(record)
+    headers = {"Content-Disposition": f'attachment; filename="{session_id}.pgn"'}
+    return Response(content=pgn, media_type="application/x-chess-pgn", headers=headers)
+
+
+@router.get("/{session_id}/replay", response_model=ReplayResponse)
+def get_replay(session_id: str = Path(..., description="Session identifier")) -> ReplayResponse:
+    try:
+        record = store.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Session not found") from None
+    moves = _ordered_move_log(record.move_log)
+    replay_moves = [
+        ReplayMove(
+            ply=entry.get("ply", idx + 1),
+            side=entry.get("side", "player"),
+            san=entry.get("san") or entry.get("uci", ""),
+            uci=entry.get("uci", ""),
+        )
+        for idx, entry in enumerate(moves)
+        if entry.get("uci")
+    ]
+    return ReplayResponse(
+        session_id=record.session_id,
+        player_color=record.player_color,
+        engine_color=record.engine_color,
+        status=record.status,
+        result=record.result,
+        winner=record.winner,
+        initial_fen=record.initial_fen or record.fen,
+        moves=replay_moves,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
 
 
 @router.post("/{session_id}/moves", response_model=MoveResponse)

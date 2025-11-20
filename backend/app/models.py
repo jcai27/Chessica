@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
+import chess
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 
 from .database import Base
 
@@ -25,11 +27,17 @@ class SessionModel(Base):
     engine_depth = Column(Integer, default=3, nullable=False)
     engine_rating = Column(Integer, default=1200, nullable=False)
     status = Column(String, default="active", nullable=False)
+    result = Column(String, nullable=True)
+    winner = Column(String, nullable=True)
     fen = Column(String, nullable=False)
+    initial_fen = Column(String, nullable=False, default=chess.STARTING_FEN)
     clock_player_ms = Column(Integer, default=300000, nullable=False)
     clock_engine_ms = Column(Integer, default=300000, nullable=False)
     moves = Column(JSON, default=list, nullable=False)
     opponent_profile = Column(JSON, nullable=False)
+    player_white_id = Column(String, nullable=True)
+    player_black_id = Column(String, nullable=True)
+    is_multiplayer = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
@@ -44,6 +52,7 @@ class SessionModel(Base):
             "difficulty": self.difficulty,
             "status": self.status,
             "fen": self.fen,
+            "initial_fen": self.initial_fen,
             "clock_player_ms": self.clock_player_ms,
             "clock_engine_ms": self.clock_engine_ms,
             "moves": list(self.moves or []),

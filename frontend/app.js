@@ -45,6 +45,11 @@ const refs = {
   riskBar: document.getElementById("riskBar"),
   difficultySelect: document.getElementById("difficultySelect"),
   difficultyNote: document.getElementById("difficultyNote"),
+  shareLink: document.getElementById("shareLink"),
+  shareHint: document.getElementById("shareHint"),
+  copyLinkBtn: document.getElementById("copyLinkBtn"),
+  openReplayBtn: document.getElementById("openReplayBtn"),
+  downloadPgnBtn: document.getElementById("downloadPgnBtn"),
 };
 
 function log(message) {
@@ -91,7 +96,7 @@ function isPlayersTurn() {
 }
 
 function formatEval(cp) {
-  if (typeof cp !== "number") return "—";
+  if (typeof cp !== "number") return "N/A";
   const score = (cp / 100).toFixed(2);
   return cp >= 0 ? `+${score}` : score;
 }
@@ -120,7 +125,7 @@ function updateCoachSummaryText(message) {
     return;
   }
   if (state.coachSummaryLoading) {
-    setInsightSummaryContent("Generating coach summary…");
+    setInsightSummaryContent("Generating coach summary...");
     return;
   }
   const evalText =
@@ -138,6 +143,75 @@ function resetCoachSummary(evaluationCp = null) {
   state.coachSummaryLoading = false;
   updateCoachSummaryText();
   updateCoachButtonState();
+}
+
+function buildReplayUrl() {
+  if (!state.sessionId) return "";
+  const url = new URL(window.location.href);
+  const replayPath = url.pathname.replace("computer.html", "replay.html");
+  return `${url.origin}${replayPath}?session=${state.sessionId}`;
+}
+
+function resetShare() {
+  if (refs.shareLink) {
+    refs.shareLink.value = "Start a session to unlock.";
+  }
+  [refs.copyLinkBtn, refs.openReplayBtn, refs.downloadPgnBtn].forEach((btn) => {
+    if (btn) btn.disabled = true;
+  });
+  if (refs.shareHint) {
+    refs.shareHint.textContent = "Available after the game ends.";
+  }
+}
+
+function updateShareControls() {
+  const ready = Boolean(state.sessionId && state.gameOver);
+  const shareUrl = ready ? buildReplayUrl() : "";
+  if (refs.shareLink) {
+    refs.shareLink.value = shareUrl || "Finish the game to unlock sharing.";
+  }
+  [refs.copyLinkBtn, refs.openReplayBtn, refs.downloadPgnBtn].forEach((btn) => {
+    if (btn) btn.disabled = !ready;
+  });
+  if (refs.shareHint) {
+    refs.shareHint.textContent = ready ? "Ready to share or replay." : "Available after the game ends.";
+  }
+}
+
+async function copyShareLink() {
+  const link = buildReplayUrl();
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    if (refs.shareHint) refs.shareHint.textContent = "Link copied.";
+  } catch (err) {
+    window.prompt("Copy this link manually:", link);
+  }
+}
+
+async function downloadPgn() {
+  if (!state.sessionId) return;
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${state.sessionId}/pgn`);
+    if (!res.ok) throw new Error(`PGN download failed (${res.status})`);
+    const pgn = await res.text();
+    const blob = new Blob([pgn], { type: "application/x-chess-pgn" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${state.sessionId}.pgn`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (error) {
+    log(error.message);
+    alert("Unable to download PGN right now.");
+  }
+}
+
+function openReplayView() {
+  const link = buildReplayUrl();
+  if (!link) return;
+  window.open(link, "_blank");
 }
 
 function describeMaterialBalance() {
@@ -188,8 +262,8 @@ function renderMoveList() {
   }
   state.movePairs.forEach((pair) => {
     const li = document.createElement("li");
-    const blackMove = pair.black ? pair.black : "…";
-    li.textContent = `${pair.number}. ${pair.white || "…"} ${blackMove}`;
+    const blackMove = pair.black ? pair.black : "...";
+    li.textContent = `${pair.number}. ${pair.white || "..."} ${blackMove}`;
     refs.moveList.appendChild(li);
   });
 }
@@ -212,11 +286,11 @@ function addSanMove(san, color) {
     state.movePairs.push({ number, white: san, black: null });
   } else {
     if (state.movePairs.length === 0) {
-      state.movePairs.push({ number: 1, white: "…", black: san });
+      state.movePairs.push({ number: 1, white: "...", black: san });
     } else {
       const last = state.movePairs[state.movePairs.length - 1];
       if (last.black) {
-        state.movePairs.push({ number: state.movePairs.length + 1, white: "…", black: san });
+        state.movePairs.push({ number: state.movePairs.length + 1, white: "...", black: san });
       } else {
         last.black = san;
       }
@@ -231,6 +305,7 @@ function resetInsights(message = "No moves yet.") {
   state.coachSummaryLoading = false;
   updateCoachSummaryText(message);
   updateCoachButtonState();
+  resetShare();
   if (refs.insightDetails) {
     refs.insightDetails.innerHTML = "<li>Submit a move to see evaluation metrics.</li>";
   }
@@ -301,11 +376,11 @@ function renderAnalysisMoves(moves = []) {
   moves.forEach((move) => {
     const li = document.createElement("li");
     const label = document.createElement("strong");
-    label.textContent = `${move.ply}. ${move.player_move || "…"} → ${move.engine_reply || "…"}`;
+    label.textContent = `${move.ply}. ${move.player_move || "..."} -> ${move.engine_reply || "..."}`;
     li.appendChild(label);
 
     const meta = document.createElement("span");
-    meta.textContent = `Eval ${formatEval(move.objective_eval_cp)} • Exploit +${move.exploit_gain_cp} cp`;
+    meta.textContent = `Eval ${formatEval(move.objective_eval_cp)} - Exploit +${move.exploit_gain_cp} cp`;
     li.appendChild(meta);
 
     const motifs = document.createElement("span");
@@ -413,10 +488,11 @@ async function createSession(payload) {
   state.gameOver = false;
   state.chess.load(START_FEN);
   resetInsights();
+  updateShareControls();
   resetMoveHistory();
-  refs.sessionStatus.textContent = `Session ${session.session_id} · Engine plays ${
+  refs.sessionStatus.textContent = `Session ${session.session_id} | Engine plays ${
     session.engine_color
-  } · ${capitalize(session.difficulty)} (~${session.engine_rating} Elo, depth ${session.engine_depth})`;
+  } | ${capitalize(session.difficulty)} (~${session.engine_rating} Elo, depth ${session.engine_depth})`;
   log(`Created session ${session.session_id}`);
   await loadSessionDetail();
   connectStream();
@@ -430,13 +506,15 @@ async function loadSessionDetail() {
   const detail = await res.json();
   state.sessionDetail = detail;
   state.chess.load(detail.fen);
+  state.gameOver = detail.status !== "active";
   resetInsights(detail.moves.length ? "Resume play to update insights." : "No moves yet.");
-  refs.sessionStatus.textContent = `Session ${detail.session_id} · Engine plays ${detail.engine_color} · ${capitalize(
+  refs.sessionStatus.textContent = `Session ${detail.session_id} | Engine plays ${detail.engine_color} | ${capitalize(
     detail.difficulty,
   )} (~${detail.engine_rating} Elo, depth ${detail.engine_depth})`;
   renderBoard();
   updateTendencies(detail.opponent_profile);
   rebuildNotationFromMoves(detail.moves || []);
+  updateShareControls();
   await ensureEngineOpensIfNeeded();
 }
 
@@ -539,6 +617,7 @@ async function submitMove(uciValue, { bypassTurnCheck = false, suppressAlerts = 
     state.gameOver = true;
     refs.sessionStatus.textContent = response.message || `Game over (${response.result})`;
     updateCoachButtonState();
+    updateShareControls();
   }
   return response;
 }
@@ -611,6 +690,18 @@ if (refs.coachSummaryBtn) {
 if (refs.difficultySelect) {
   refs.difficultySelect.addEventListener("change", updateDifficultyNote);
   updateDifficultyNote();
+}
+
+if (refs.copyLinkBtn) {
+  refs.copyLinkBtn.addEventListener("click", copyShareLink);
+}
+
+if (refs.openReplayBtn) {
+  refs.openReplayBtn.addEventListener("click", openReplayView);
+}
+
+if (refs.downloadPgnBtn) {
+  refs.downloadPgnBtn.addEventListener("click", downloadPgn);
 }
 
 refs.board.addEventListener("drag-start", (event) => {

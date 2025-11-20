@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 from uuid import uuid4
+import random
 
 import chess
 
@@ -22,6 +23,8 @@ from .schemas import (
     SessionCreateRequest,
     SessionDetail,
     SessionResponse,
+    MultiplayerSessionCreateRequest,
+    MultiplayerSessionResponse,
 )
 
 DEFAULT_FEN = chess.STARTING_FEN
@@ -75,6 +78,7 @@ class SessionRecord:
     created_at: datetime
     updated_at: datetime
     fen: str
+    initial_fen: str = DEFAULT_FEN
     clocks: ClockState
     move_log: List[Dict[str, Any]] = field(default_factory=list)
     opponent_profile: OpponentProfile = field(
@@ -83,6 +87,11 @@ class SessionRecord:
             motif_risk={"forks": 0.4, "back_rank": 0.3},
         )
     )
+    player_white_id: str | None = None
+    player_black_id: str | None = None
+    is_multiplayer: bool = False
+    result: str | None = None
+    winner: str | None = None
     engine_depth: int = settings.engine_default_depth
     engine_rating: int = field(default_factory=lambda: depth_to_rating(settings.engine_default_depth))
     difficulty: DifficultyLevel = field(
@@ -118,6 +127,21 @@ class SessionRecord:
             moves=simple_moves,
             history=history_models,
             opponent_profile=self.opponent_profile,
+            is_multiplayer=self.is_multiplayer,
+            player_white_id=self.player_white_id,
+            player_black_id=self.player_black_id,
+        )
+
+    def to_multiplayer_response(self) -> MultiplayerSessionResponse:
+        return MultiplayerSessionResponse(
+            session_id=self.session_id,
+            player_white_id=self.player_white_id,
+            player_black_id=self.player_black_id,
+            status=self.status,
+            fen=self.fen,
+            clocks=self.clocks,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
         )
 
     def to_cache(self) -> Dict[str, Any]:
@@ -127,16 +151,22 @@ class SessionRecord:
             "engine_color": self.engine_color,
             "exploit_mode": self.exploit_mode,
             "status": self.status,
+            "result": self.result,
+            "winner": self.winner,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "fen": self.fen,
             "clocks": self.clocks.model_dump(),
             "moves": self.move_log,
             "opponent_profile": self.opponent_profile.model_dump(),
+            "initial_fen": self.initial_fen,
             "engine_depth": self.engine_depth,
             "engine_rating": self.engine_rating,
             "difficulty": self.difficulty,
             "last_eval_cp": self.last_eval_cp,
+            "player_white_id": self.player_white_id,
+            "player_black_id": self.player_black_id,
+            "is_multiplayer": self.is_multiplayer,
         }
 
     @classmethod
@@ -150,6 +180,7 @@ class SessionRecord:
             created_at=datetime.fromisoformat(payload["created_at"]),
             updated_at=datetime.fromisoformat(payload["updated_at"]),
             fen=payload["fen"],
+            initial_fen=payload.get("initial_fen", DEFAULT_FEN),
             clocks=ClockState.model_validate(payload["clocks"]),
             move_log=_normalize_moves(payload.get("moves", [])),
             opponent_profile=OpponentProfile.model_validate(payload["opponent_profile"]),
@@ -157,6 +188,11 @@ class SessionRecord:
             engine_rating=payload.get("engine_rating", depth_to_rating(settings.engine_default_depth)),
             difficulty=payload.get("difficulty", "advanced"),
             last_eval_cp=payload.get("last_eval_cp", 0),
+            player_white_id=payload.get("player_white_id"),
+            player_black_id=payload.get("player_black_id"),
+            is_multiplayer=payload.get("is_multiplayer", False),
+            result=payload.get("result"),
+            winner=payload.get("winner"),
         )
 
     @classmethod
@@ -176,6 +212,7 @@ class SessionRecord:
             created_at=model.created_at,
             updated_at=model.updated_at,
             fen=model.fen,
+            initial_fen=getattr(model, "initial_fen", DEFAULT_FEN),
             clocks=ClockState(player_ms=model.clock_player_ms, engine_ms=model.clock_engine_ms),
             move_log=move_log,
             opponent_profile=OpponentProfile.model_validate(model.opponent_profile),
@@ -183,6 +220,11 @@ class SessionRecord:
             engine_rating=model.engine_rating,
             difficulty=model.difficulty or "custom",
             last_eval_cp=last_eval,
+            player_white_id=model.player_white_id,
+            player_black_id=model.player_black_id,
+            is_multiplayer=bool(model.is_multiplayer),
+            result=model.result,
+            winner=model.winner,
         )
 
     @property
@@ -219,6 +261,7 @@ class SessionRepository:
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
             fen=DEFAULT_FEN,
+            initial_fen=DEFAULT_FEN,
             clocks=ClockState(player_ms=payload.time_control.initial_ms, engine_ms=payload.time_control.initial_ms),
             engine_depth=depth,
             engine_rating=rating,
@@ -239,6 +282,7 @@ class SessionRepository:
                 engine_rating=record.engine_rating,
                 status=record.status,
                 fen=record.fen,
+                initial_fen=record.initial_fen,
                 clock_player_ms=record.clocks.player_ms,
                 clock_engine_ms=record.clocks.engine_ms,
                 moves=list(record.move_log),
@@ -246,6 +290,70 @@ class SessionRepository:
                 created_at=record.created_at,
                 updated_at=record.updated_at,
                 engine_depth=record.engine_depth,
+                is_multiplayer=False,
+            )
+            db.add(db_model)
+            db.commit()
+        self.cache.set(record.session_id, record.to_cache())
+        return record
+
+    def create_multiplayer_session(self, payload: MultiplayerSessionCreateRequest) -> SessionRecord:
+        session_id = f"sess_{uuid4().hex}"
+        white_id = payload.player_white_id
+        black_id = payload.player_black_id
+
+        if payload.color == "white" and not white_id and black_id:
+            white_id, black_id = black_id, white_id
+        elif payload.color == "black" and not black_id and white_id:
+            black_id, white_id = white_id, black_id
+        elif payload.color == "auto" and white_id and black_id and random.choice([True, False]):
+            white_id, black_id = black_id, white_id
+
+        record = SessionRecord(
+            session_id=session_id,
+            player_color="white",
+            engine_color="black",
+            exploit_mode="off",
+            status="active",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            fen=payload.seed_fen or DEFAULT_FEN,
+            initial_fen=payload.seed_fen or DEFAULT_FEN,
+            clocks=ClockState(player_ms=payload.time_control.initial_ms, engine_ms=payload.time_control.initial_ms),
+            difficulty="advanced",
+            engine_depth=settings.engine_default_depth,
+            engine_rating=depth_to_rating(settings.engine_default_depth),
+            player_white_id=white_id,
+            player_black_id=black_id,
+            is_multiplayer=True,
+        )
+
+        record.opponent_profile = OpponentProfile(
+            style=OpponentStyle(tactical=0.5, risk=0.5),
+            motif_risk={"forks": 0.4, "back_rank": 0.3},
+        )
+
+        with SessionLocal() as db:
+            db_model = SessionModel(
+                session_id=record.session_id,
+                player_color=record.player_color,
+                engine_color=record.engine_color,
+                exploit_mode=record.exploit_mode,
+                difficulty=record.difficulty,
+                engine_rating=record.engine_rating,
+                status=record.status,
+                fen=record.fen,
+                initial_fen=record.initial_fen,
+                clock_player_ms=record.clocks.player_ms,
+                clock_engine_ms=record.clocks.engine_ms,
+                moves=list(record.move_log),
+                opponent_profile=record.opponent_profile.model_dump(),
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+                engine_depth=record.engine_depth,
+                player_white_id=record.player_white_id,
+                player_black_id=record.player_black_id,
+                is_multiplayer=True,
             )
             db.add(db_model)
             db.commit()
@@ -271,6 +379,7 @@ class SessionRepository:
                 raise KeyError(record.session_id)
             model.status = record.status
             model.fen = record.fen
+            model.initial_fen = record.initial_fen
             model.clock_player_ms = record.clocks.player_ms
             model.clock_engine_ms = record.clocks.engine_ms
             model.moves = list(record.move_log)
@@ -278,6 +387,11 @@ class SessionRepository:
             model.engine_depth = record.engine_depth
             model.engine_rating = record.engine_rating
             model.difficulty = record.difficulty
+            model.player_white_id = record.player_white_id
+            model.player_black_id = record.player_black_id
+            model.is_multiplayer = record.is_multiplayer
+            model.result = record.result
+            model.winner = record.winner
             model.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(model)

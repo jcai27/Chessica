@@ -7,9 +7,10 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import analysis, analytics, sessions, stream, users
+from .api import analysis, analytics, sessions, stream, users, multiplayer
 from .config import settings
 from .database import Base, engine
+from .migrations import ensure_multiplayer_columns
 
 if hasattr(asyncio, "WindowsProactorEventLoopPolicy"):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -28,6 +29,7 @@ app.include_router(sessions.router, prefix=settings.api_prefix)
 app.include_router(analysis.router, prefix=settings.api_prefix)
 app.include_router(analytics.router, prefix=settings.api_prefix)
 app.include_router(users.router, prefix=settings.api_prefix)
+app.include_router(multiplayer.router, prefix=settings.api_prefix)
 app.include_router(stream.router)
 
 
@@ -39,3 +41,4 @@ def healthcheck() -> dict[str, str]:
 @app.on_event("startup")
 def _startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_multiplayer_columns(engine)
