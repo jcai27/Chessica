@@ -24,6 +24,10 @@ const refs = {
   abortBtn: document.getElementById("abortBtn"),
   whiteClock: document.getElementById("whiteClock"),
   blackClock: document.getElementById("blackClock"),
+  whiteClockLabel: document.getElementById("whiteClockLabel"),
+  blackClockLabel: document.getElementById("blackClockLabel"),
+  whiteClockTile: document.getElementById("whiteClockTile"),
+  blackClockTile: document.getElementById("blackClockTile"),
 };
 
 const state = {
@@ -35,6 +39,9 @@ const state = {
   chess: new Chess(),
   movePairs: [],
   socket: null,
+  heartbeatTimer: null,
+  reconnectTimer: null,
+  reconnectAttempts: 0,
 };
 
 function setStatus(text) {
@@ -53,6 +60,17 @@ function setPlayerColor(text) {
   if (refs.playerColorDisplay) refs.playerColorDisplay.textContent = text || "";
 }
 
+function updateClockLabels() {
+  if (!refs.whiteClockLabel || !refs.blackClockLabel) return;
+  if (state.playerColor === "white") {
+    refs.whiteClockLabel.textContent = "You (White)";
+    refs.blackClockLabel.textContent = "Opponent";
+  } else {
+    refs.whiteClockLabel.textContent = "Opponent";
+    refs.blackClockLabel.textContent = "You (Black)";
+  }
+}
+
 function logMessage(text) {
   if (!refs.messages) return;
   const li = document.createElement("li");
@@ -61,12 +79,16 @@ function logMessage(text) {
 }
 
 function formatMs(ms) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${seconds}`;
+  const clamped = Math.max(0, ms);
+  if (clamped < 60000) {
+    const seconds = Math.floor(clamped / 1000);
+    const tenths = Math.floor((clamped % 1000) / 100);
+    return `0:${seconds.toString().padStart(2, "0")}.${tenths}`;
+  }
+  const totalSeconds = Math.floor(clamped / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function updateClocks(clocks) {
@@ -79,6 +101,10 @@ function updateTurnIndicator() {
   const turn = state.chess.turn() === "w" ? "white" : "black";
   const status = turn === state.playerColor ? "Your turn" : "Opponent's turn";
   setStatus(`${status}. Queue: ${state.queueing ? "waiting" : "ready"}`);
+  if (refs.whiteClockTile && refs.blackClockTile) {
+    refs.whiteClockTile.classList.toggle("is-active", turn === "white");
+    refs.blackClockTile.classList.toggle("is-active", turn === "black");
+  }
 }
 
 function renderBoard() {
@@ -172,6 +198,7 @@ function handleMatched(data) {
   setMatchInfo(`Session ready. Your color: ${state.playerColor}`);
   setSessionId(`Session ID: ${state.sessionId}`);
   setPlayerColor(`Playing as ${state.playerColor}`);
+  updateClockLabels();
   logMessage("Matched. Loading session...");
   loadSessionDetail();
 }
@@ -197,6 +224,7 @@ async function loadSessionDetail(sessionId = null) {
   (detail.moves || []).forEach((uci) => applyUci(uci));
   setSessionId(`Session ID: ${state.sessionId}`);
   setPlayerColor(`Playing as ${state.playerColor}`);
+  updateClockLabels();
   setMatchInfo(`Opponent: ${state.player_white_id === state.playerId ? detail.player_black_id : detail.player_white_id || "?"}`);
   renderBoard();
   updateClocks(detail.clocks);
@@ -212,7 +240,6 @@ async function submitMove(uci) {
     uci,
     player_id: state.playerId,
     client_ts: new Date().toISOString(),
-    clock: { player_ms: 300000, engine_ms: 300000 },
   };
   const res = await fetch(`${API_BASE}/multiplayer/sessions/${state.sessionId}/moves`, {
     method: "POST",
@@ -232,10 +259,24 @@ async function submitMove(uci) {
 
 function connectStream() {
   if (!state.sessionId) return;
-  if (state.socket) state.socket.close();
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
+  if (state.socket) {
+    try {
+      state.socket.close();
+    } catch (_) {
+      // ignore
+    }
+  }
   const socket = new WebSocket(`${WS_BASE}/sessions/${state.sessionId}/stream`);
   state.socket = socket;
-  socket.onopen = () => logMessage("Stream connected.");
+  socket.onopen = () => {
+    state.reconnectAttempts = 0;
+    logMessage("Stream connected.");
+    startHeartbeat();
+  };
   socket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
@@ -272,7 +313,44 @@ function connectStream() {
       // ignore
     }
   };
-  socket.onclose = () => logMessage("Stream closed.");
+  socket.onerror = () => logMessage("Stream error.");
+  socket.onclose = () => {
+    logMessage("Stream closed.");
+    stopHeartbeat();
+    scheduleReconnect();
+  };
+}
+
+function stopHeartbeat() {
+  if (state.heartbeatTimer) {
+    clearInterval(state.heartbeatTimer);
+    state.heartbeatTimer = null;
+  }
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  state.heartbeatTimer = setInterval(() => {
+    if (state.socket?.readyState === WebSocket.OPEN) {
+      try {
+        state.socket.send(JSON.stringify({ type: "ping", ts: Date.now() }));
+      } catch {
+        // ignore send failure; reconnect will pick it up
+      }
+    }
+  }, 15000);
+}
+
+function scheduleReconnect() {
+  if (!state.sessionId) return;
+  if (state.reconnectTimer) return;
+  const attempt = state.reconnectAttempts || 0;
+  const delay = Math.min(8000, 500 * 2 ** attempt);
+  state.reconnectAttempts = attempt + 1;
+  state.reconnectTimer = setTimeout(() => {
+    state.reconnectTimer = null;
+    connectStream();
+  }, delay);
 }
 
 // Drag/drop handlers

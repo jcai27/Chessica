@@ -75,7 +75,22 @@
             <h3>Session</h3>
             <p id="sessionIdDisplay"></p>
             <p id="playerColorDisplay"></p>
-            <p>Clocks: <span id="whiteClock">05:00</span> | <span id="blackClock">05:00</span></p>
+            <div class="clock-stack">
+              <div class="clock-tile opponent" id="blackClockTile">
+                <div class="clock-meta">
+                  <span class="clock-dot clock-dot--black"></span>
+                  <span class="clock-label" id="blackClockLabel">Black</span>
+                </div>
+                <span class="clock-value" id="blackClock">05:00</span>
+              </div>
+              <div class="clock-tile player" id="whiteClockTile">
+                <div class="clock-meta">
+                  <span class="clock-dot clock-dot--white"></span>
+                  <span class="clock-label" id="whiteClockLabel">White</span>
+                </div>
+                <span class="clock-value" id="whiteClock">05:00</span>
+              </div>
+            </div>
           </div>
         </div>
 

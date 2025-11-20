@@ -55,6 +55,24 @@ def _bucket(time_control: ClockState) -> str:
     return f"{time_control.initial_ms}:{time_control.increment_ms}"
 
 
+_MATERIAL_VALUES = {
+    chess.PAWN: 100,
+    chess.KNIGHT: 320,
+    chess.BISHOP: 330,
+    chess.ROOK: 500,
+    chess.QUEEN: 900,
+}
+
+
+def _quick_material_eval(board: chess.Board) -> int:
+    """Lightweight eval to avoid blocking on Stockfish for multiplayer moves."""
+    score = 0
+    for piece_type, value in _MATERIAL_VALUES.items():
+        score += len(board.pieces(piece_type, chess.WHITE)) * value
+        score -= len(board.pieces(piece_type, chess.BLACK)) * value
+    return score
+
+
 def _pop_match(player_id: str, bucket: str, preferred_color: str) -> Optional[dict]:
     if _redis_client:
         candidates = _redis_client.lrange(_queue_list_key(bucket), 0, -1)
@@ -236,7 +254,7 @@ async def play_move(
     elif board.raw.is_stalemate():
         eval_cp = 0
     else:
-        eval_cp = engine.evaluate_position(board, record.difficulty, record.engine_rating)
+        eval_cp = _quick_material_eval(board.raw)
 
     insight_dict = engine.build_move_insight(
         before,

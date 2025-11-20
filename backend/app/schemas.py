@@ -181,7 +181,7 @@ class MultiplayerMoveRequest(BaseModel):
     uci: str
     player_id: str
     client_ts: datetime
-    clock: ClockState
+    clock: ClockState | None = None
 
 
 class MultiplayerMoveResponse(BaseModel):
