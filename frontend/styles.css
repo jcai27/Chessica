@@ -375,7 +375,7 @@ button.secondary:hover {
   width: 100%;
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 0.75rem;
 }
 
@@ -571,6 +571,14 @@ button.secondary:hover {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.tendencies-card .card-header {
+  align-items: center;
+}
+
+.tendencies-card .session-chip {
+  margin-left: auto;
 }
 
 .tendencies-card,
