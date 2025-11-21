@@ -239,8 +239,11 @@ async def play_move(
     # Clock handling: deduct elapsed from mover based on last update.
     now = datetime.now(timezone.utc)
     elapsed_ms = 0
-    if record.updated_at:
-        elapsed_ms = max(0, int((now - record.updated_at).total_seconds() * 1000))
+    last_update = record.updated_at
+    if last_update and last_update.tzinfo is None:
+        last_update = last_update.replace(tzinfo=timezone.utc)
+    if last_update:
+        elapsed_ms = max(0, int((now - last_update).total_seconds() * 1000))
     clocks = record.clocks.model_dump()
     if mover_color == "white":
         clocks["player_ms"] = max(0, clocks.get("player_ms", 0) - elapsed_ms)
