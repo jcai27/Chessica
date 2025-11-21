@@ -238,7 +238,13 @@ def extract_position_features(board: chess.Board) -> dict[str, object]:
         center_control = len(controls & center_squares)
         extended_control = len(controls & extended_center)
         opp_half = len([sq for sq in controls if (chess.square_rank(sq) >= 4 and color == chess.BLACK) or (chess.square_rank(sq) <= 3 and color == chess.WHITE)])
-        king_zone = chess.SquareSet(chess.SQUARES) & chess.square_ring(board.king(color)) if board.king(color) else chess.SquareSet()
+        king_zone_sqs = set()
+        if board.king(color):
+            king_square = board.king(color)
+            for sq in chess.SQUARES:
+                if chess.square_distance(king_square, sq) <= 1:
+                    king_zone_sqs.add(sq)
+        king_zone = chess.SquareSet(king_zone_sqs)
         attackers = len([sq for sq in king_zone if board.is_attacked_by(not color, sq)])
         open_files_to_king = sum(
             1
