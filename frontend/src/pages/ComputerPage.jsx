@@ -269,15 +269,6 @@ function ComputerPage() {
     <div className="app">
       <div className="page-grid">
         <section className="card board-card">
-          <div className="card-header">
-            <div>
-              <h2>Live Board</h2>
-              <span className="muted">{statusText}</span>
-            </div>
-            <span className={`status-chip ${session?.status === "completed" ? "warn" : ""}`}>
-              {session?.session_id ? `Session ${session.session_id}` : "Idle"}
-            </span>
-          </div>
           <div className="board-wrap">
             <div className="board-shell-react">
               <Chessboard
@@ -289,32 +280,14 @@ function ComputerPage() {
                 customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
               />
             </div>
-            <div className="inline-actions">
+            <div className="inline-actions compact">
               <button type="button" className="secondary" disabled={!session?.session_id} onClick={downloadPgn}>
                 Download PGN
               </button>
               <button type="button" className="secondary" disabled={!shareUrl} onClick={copyShareLink}>
                 Copy Replay Link
               </button>
-              <span className="muted">{message}</span>
-            </div>
-            <div className="share-card">
-              <div className="share-header">
-                <div>
-                  <h3>Coach & Insight</h3>
-                  <span className="muted">Explain the current position in plain English.</span>
-                </div>
-                <button type="button" disabled={!session?.session_id || coachLoading} onClick={runCoachSummary}>
-                  {coachLoading ? "Generating..." : "Explain Position"}
-                </button>
-              </div>
-              <div className="insight-section">
-                <div className="insight-eval">
-                  <div className="eval-score">{formatEval(latestEval ?? 0)}</div>
-                  <span>{describeEval(latestEval ?? 0)}</span>
-                  <p className="muted">{coachSummary || "No coach summary yet."}</p>
-                </div>
-              </div>
+              <span className="muted tiny">{message || statusText}</span>
             </div>
           </div>
         </section>
@@ -328,6 +301,9 @@ function ComputerPage() {
               <div>
                 <h1>Chessica Control Room</h1>
                 <p>Exploit-aware sessions with offline-ready assets, coach summaries, and difficulty presets.</p>
+                <small className="muted">
+                  {session?.session_id ? `Session ${session.session_id} · Engine plays ${session.engine_color}` : "No active session"}
+                </small>
               </div>
             </div>
             <span className="pill">{session ? "Active" : "Setup"}</span>
@@ -440,6 +416,23 @@ function ComputerPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </section>
+
+          <section className="card insight-card">
+            <div className="card-header">
+              <div>
+                <h2>Coach & Insight</h2>
+                <span className="muted">Explain the current position in plain English.</span>
+              </div>
+              <button type="button" disabled={!session?.session_id || coachLoading} onClick={runCoachSummary}>
+                {coachLoading ? "Generating..." : "Explain Position"}
+              </button>
+            </div>
+            <div className="insight-eval">
+              <div className="eval-score">{formatEval(latestEval ?? 0)}</div>
+              <span>{describeEval(latestEval ?? 0)}</span>
+              <p className="muted">{coachSummary || "No coach summary yet."}</p>
             </div>
           </section>
         </div>

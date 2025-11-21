@@ -77,7 +77,9 @@
   border-radius: var(--panel-radius);
   padding: 0.5rem;
   aspect-ratio: 1 / 1;
-  max-height: min(65vh, 70vw);
+  max-height: calc(100vh - 240px);
+  max-width: 100%;
+  width: min(100%, 80vh);
 }
 
 .analysis-list {
@@ -240,6 +242,30 @@ body {
 .board-shell-react .react-chessboard {
   width: 100% !important;
   height: 100% !important;
+}
+
+.card.minimal {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem 0.5rem;
+  box-shadow: none;
+}
+
+.inline-actions.compact {
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.inline-actions .tiny {
+  font-size: 0.85rem;
+}
+
+.side-stack {
+  display: grid;
+  grid-template-rows: auto auto 1fr 1fr 1fr;
+  gap: 0.75rem;
+  min-height: 0;
+  height: 100%;
 }
 
 .side-stack {
