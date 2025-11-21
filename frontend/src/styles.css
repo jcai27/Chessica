@@ -75,10 +75,10 @@
   background: var(--panel-soft);
   border: 1px solid var(--border);
   border-radius: var(--panel-radius);
-  padding: 0.5rem;
+  padding: 0.35rem;
   aspect-ratio: 1 / 1;
-  max-height: min(70vh, 70vw);
-  max-width: min(90vw, 700px);
+  max-height: min(60vh, 60vw);
+  max-width: min(85vw, 560px);
   width: 100%;
   margin: 0 auto;
 }
@@ -356,12 +356,12 @@ body {
 
 .clock-bar.top-clock {
   width: 100%;
-  max-width: 700px;
+  max-width: 560px;
 }
 
 .clock-bar.bottom-clock {
   width: 100%;
-  max-width: 700px;
+  max-width: 560px;
 }
 
 .landing {
