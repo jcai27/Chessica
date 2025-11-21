@@ -238,7 +238,7 @@ function MultiplayerPage() {
                 <span className="muted">{playerColor === "white" ? "White" : "Black"}</span>
               </div>
             </div>
-            <div className="inline-actions compact">
+            <div className="inline-actions compact align-right">
               <button type="button" className="secondary" disabled={!sessionId} onClick={() => action("resign")}>
                 Resign
               </button>

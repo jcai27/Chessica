@@ -66,6 +66,8 @@
   gap: 0.75rem;
   flex: 1;
   min-height: 0;
+  justify-items: center;
+  align-content: start;
 }
 
 .board-shell-react {
@@ -77,6 +79,7 @@
   max-height: calc(100vh - 240px);
   max-width: 100%;
   width: min(100%, 80vh);
+  margin: 0 auto;
 }
 
 .analysis-list {
@@ -251,6 +254,10 @@ body {
 .inline-actions.compact {
   gap: 0.5rem;
   justify-content: flex-start;
+}
+
+.inline-actions.align-right {
+  justify-content: flex-end;
 }
 
 .inline-actions .tiny {
