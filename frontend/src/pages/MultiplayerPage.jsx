@@ -3,7 +3,7 @@ import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { api } from "../lib/api";
 import { DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
-import { formatMs } from "../lib/format";
+import { formatEval, describeEval, formatMs } from "../lib/format";
 
 const queueDefaults = {
   player_id: "",
@@ -27,6 +27,11 @@ function MultiplayerPage() {
   const [movePairs, setMovePairs] = useState([]);
   const [message, setMessage] = useState("");
   const [matchInfo, setMatchInfo] = useState("");
+  const [analysis, setAnalysis] = useState([]);
+  const [analysisSummary, setAnalysisSummary] = useState(null);
+  const [coachSummary, setCoachSummary] = useState("");
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("match");
 
   useEffect(() => {
     return () => {
@@ -122,6 +127,7 @@ function MultiplayerPage() {
     rebuildNotation(detail.moves || []);
     setClocks(detail.clocks || DEFAULT_TIME_CONTROL);
     connectStream(id);
+    await refreshAnalysis(id);
   };
 
   const handleQueue = async (event) => {
@@ -217,6 +223,31 @@ function MultiplayerPage() {
     }
   };
 
+  const refreshAnalysis = async (id) => {
+    if (!id) return;
+    try {
+      const data = await api.analysis(id);
+      setAnalysis(data.moves || []);
+      setAnalysisSummary(data.summary || null);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  };
+
+  const runCoach = async () => {
+    if (!sessionId) return;
+    setCoachLoading(true);
+    setCoachSummary("");
+    try {
+      const data = await api.coach(sessionId);
+      setCoachSummary(data.summary || "");
+    } catch (err) {
+      setCoachSummary(err.message || "Coach summary unavailable.");
+    } finally {
+      setCoachLoading(false);
+    }
+  };
+
   return (
     <div className="app">
       <div className="page-grid">
@@ -277,70 +308,74 @@ function MultiplayerPage() {
 
           <section className="card tab-card">
             <div className="tab-bar">
-              <button
-                type="button"
-                className="tab-button active"
-                aria-current="true"
-              >
-                Match
-              </button>
+              {[
+                { key: "match", label: "Match" },
+                { key: "moves", label: "Move List" },
+                { key: "analysis", label: "Analysis" },
+                { key: "coach", label: "Coach Insight" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`tab-button ${activeTab === tab.key ? "active" : ""}`}
+                  onClick={() => setActiveTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
             <div className="tab-panel">
-              <form className="controls-form" onSubmit={handleQueue}>
-                <label className="select-field">
-                  <span>Player ID</span>
-                  <input
-                    type="text"
-                    value={form.player_id}
-                    required
-                    onChange={(e) => setForm((prev) => ({ ...prev, player_id: e.target.value }))}
-                    placeholder="your-handle"
-                  />
-                </label>
-                <label className="select-field">
-                  <span>Color</span>
-                  <select value={form.color} onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}>
-                    <option value="auto">Auto</option>
-                    <option value="white">White</option>
-                    <option value="black">Black</option>
-                  </select>
-                </label>
-                <label className="select-field">
-                  <span>Initial (ms)</span>
-                  <input
-                    type="number"
-                    value={form.initial_ms}
-                    onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
-                    min="60000"
-                    step="60000"
-                  />
-                </label>
-                <label className="select-field">
-                  <span>Increment (ms)</span>
-                  <input
-                    type="number"
-                    value={form.increment_ms}
-                    onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
-                    min="0"
-                    step="1000"
-                  />
-                </label>
-                <div className="difficulty-indicator">{queueStatus}</div>
-                <div className="inline-actions compact">
-                  <button type="submit">Join Queue</button>
-                  <button type="button" className="secondary" onClick={leaveQueue}>
-                    Leave Queue
-                  </button>
-                </div>
-              </form>
-
-              <div className="card insight-card">
-                <div className="card-header">
-                  <div>
-                    <h2>Move Log</h2>
-                    <span className="muted">Both players</span>
+              {activeTab === "match" && (
+                <form className="controls-form" onSubmit={handleQueue}>
+                  <label className="select-field">
+                    <span>Player ID</span>
+                    <input
+                      type="text"
+                      value={form.player_id}
+                      required
+                      onChange={(e) => setForm((prev) => ({ ...prev, player_id: e.target.value }))}
+                      placeholder="your-handle"
+                    />
+                  </label>
+                  <label className="select-field">
+                    <span>Color</span>
+                    <select value={form.color} onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}>
+                      <option value="auto">Auto</option>
+                      <option value="white">White</option>
+                      <option value="black">Black</option>
+                    </select>
+                  </label>
+                  <label className="select-field">
+                    <span>Initial (ms)</span>
+                    <input
+                      type="number"
+                      value={form.initial_ms}
+                      onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
+                      min="60000"
+                      step="60000"
+                    />
+                  </label>
+                  <label className="select-field">
+                    <span>Increment (ms)</span>
+                    <input
+                      type="number"
+                      value={form.increment_ms}
+                      onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
+                      min="0"
+                      step="1000"
+                    />
+                  </label>
+                  <div className="difficulty-indicator">{queueStatus}</div>
+                  <div className="inline-actions compact">
+                    <button type="submit">Join Queue</button>
+                    <button type="button" className="secondary" onClick={leaveQueue}>
+                      Leave Queue
+                    </button>
                   </div>
-                </div>
+                </form>
+              )}
+
+              {activeTab === "moves" && (
                 <ol className="analysis-list">
                   {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
                   {movePairs.map((pair) => (
@@ -351,7 +386,72 @@ function MultiplayerPage() {
                     </li>
                   ))}
                 </ol>
-              </div>
+              )}
+
+              {activeTab === "analysis" && (
+                <div className="stack">
+                  {analysisSummary && (
+                    <div className="summary-block">
+                      <div className="panel-title">
+                        <strong>Induced blunders</strong>
+                        <span className="pill">{analysisSummary.induced_blunders}</span>
+                      </div>
+                      <div className="panel-title">
+                        <strong>Eval tradeoff</strong>
+                        <span className="pill">{analysisSummary.eval_tradeoff_cp} cp</span>
+                      </div>
+                      <div className="tag-row">
+                        {(analysisSummary.themes || []).map((theme) => (
+                          <span key={theme} className="tag">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <button type="button" className="secondary" disabled={!sessionId} onClick={() => refreshAnalysis(sessionId)}>
+                    Refresh
+                  </button>
+                  <ul className="analysis-list">
+                    {analysis.length === 0 && <li className="muted">No annotated moves yet.</li>}
+                    {analysis.map((move) => (
+                      <li key={`${move.ply}-${move.player_move}-${move.engine_reply}`} className="analysis-item">
+                        <strong>
+                          {move.ply}. {move.player_move || "..."} → {move.engine_reply || "..."}
+                        </strong>
+                        <div className="muted">
+                          Eval {formatEval(move.objective_eval_cp)} · Exploit {formatEval(move.exploit_gain_cp)}
+                        </div>
+                        <div className="tag-row">
+                          {move.motifs?.map((motif) => (
+                            <span key={motif} className="tag">
+                              {motif}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="muted">{move.explanation}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {activeTab === "coach" && (
+                <div className="stack">
+                  <button type="button" disabled={!sessionId || coachLoading} onClick={runCoach}>
+                    {coachLoading ? "Generating..." : "Explain Position"}
+                  </button>
+                  {coachSummary ? (
+                    <p className="muted">{coachSummary}</p>
+                  ) : (
+                    <p className="muted">Request a coach summary after moves are played.</p>
+                  )}
+                  <div className="insight-eval">
+                    <div className="eval-score">{formatEval(analysisSummary?.eval_tradeoff_cp ?? 0)}</div>
+                    <span>{describeEval(analysisSummary?.eval_tradeoff_cp ?? 0)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         </div>
