@@ -4,7 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { api } from "../lib/api";
 import { API_BASE, DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
 import { DIFFICULTY_PRESETS, describePreset } from "../lib/difficulties";
-import { describeEval, formatEval } from "../lib/format";
+import { describeEval, formatEval, formatMs } from "../lib/format";
 
 const parseCoachSummary = (summary) => {
   const text = (summary || "").trim();
@@ -46,6 +46,10 @@ function ComputerPage() {
   }, []);
 
   const orientation = useMemo(() => session?.player_color || "white", [session?.player_color]);
+  const playerColor = orientation;
+  const engineColor = playerColor === "white" ? "black" : "white";
+  const playerMs = session?.clocks?.player_ms ?? 300000;
+  const engineMs = session?.clocks?.engine_ms ?? 300000;
 
   const shareUrl = useMemo(() => {
     if (!session?.session_id) return "";
@@ -283,6 +287,13 @@ function ComputerPage() {
       <div className="page-grid">
         <section className="card board-card">
           <div className="board-wrap">
+            <div className="clock-bar top-clock">
+              <div className="player-meta">
+                <span className="muted">Engine ({engineColor})</span>
+                <span className="muted">{describePreset(session?.difficulty || difficulty)}</span>
+              </div>
+              <span className="pill">{formatMs(engineMs)}</span>
+            </div>
             <div className="board-shell-react">
               <Chessboard
                 id="computer-board"
@@ -293,7 +304,14 @@ function ComputerPage() {
                 customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
               />
             </div>
-            <div className="inline-actions compact">
+            <div className="clock-bar bottom-clock">
+              <span className="pill">{formatMs(playerMs)}</span>
+              <div className="player-meta">
+                <strong>You</strong>
+                <span className="muted">{playerColor}</span>
+              </div>
+            </div>
+            <div className="inline-actions compact align-right">
               <button type="button" className="secondary" disabled={!session?.session_id} onClick={downloadPgn}>
                 Download PGN
               </button>

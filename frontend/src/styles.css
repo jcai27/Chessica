@@ -353,6 +353,16 @@ body {
   gap: 0.1rem;
 }
 
+.clock-bar.top-clock {
+  width: 100%;
+  max-width: 640px;
+}
+
+.clock-bar.bottom-clock {
+  width: 100%;
+  max-width: 640px;
+}
+
 .landing {
   height: 100%;
   display: grid;
