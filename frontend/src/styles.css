@@ -364,6 +364,19 @@ body {
   max-width: 560px;
 }
 
+.game-banner {
+  width: 100%;
+  max-width: 560px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: flex-start;
+}
+
 .landing {
   height: 100%;
   display: grid;

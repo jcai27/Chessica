@@ -37,6 +37,7 @@ function ComputerPage() {
   const [pending, setPending] = useState(false);
   const [latestEval, setLatestEval] = useState(null);
   const [message, setMessage] = useState("");
+  const [gameBanner, setGameBanner] = useState(null);
   const coachLines = useMemo(() => parseCoachSummary(coachSummary), [coachSummary]);
 
   useEffect(() => {
@@ -186,6 +187,7 @@ function ComputerPage() {
         `Session ${detail.session_id} • Engine plays ${detail.engine_color} • ${describePreset(detail.difficulty)}`,
       );
       resetBoards();
+      setGameBanner(null);
       chessRef.current.load(detail.fen);
       setFen(detail.fen);
       rebuildNotation(detail.moves || []);
@@ -221,22 +223,29 @@ function ComputerPage() {
     }
   };
 
-  const pickPromotion = () => {
-    const choice = window.prompt("Promote to (q, r, b, n):", "q")?.toLowerCase();
-    if (!choice) return null;
-    return ["q", "r", "b", "n"].includes(choice) ? choice : null;
+  const selectMoveWithPromotion = (sourceSquare, targetSquare) => {
+    const candidates = chessRef.current
+      .moves({ verbose: true })
+      .filter((m) => m.from === sourceSquare && m.to === targetSquare);
+    if (!candidates.length) return null;
+    const promoMoves = candidates.filter((m) => m.promotion);
+    if (!promoMoves.length) return candidates[0];
+    if (promoMoves.length === 1) return promoMoves[0];
+    const options = promoMoves.map((m) => m.promotion).filter(Boolean);
+    const choice = window.prompt(`Promote to (${options.join(", ")}):`, "q")?.toLowerCase();
+    const selected = promoMoves.find((m) => m.promotion === choice);
+    return selected || promoMoves[0];
   };
 
   const handleDrop = async (sourceSquare, targetSquare, piece) => {
     if (!session?.session_id) return false;
     if (pending) return false;
-    const promotionRank = piece.startsWith("w") ? "8" : "1";
-    const wantsPromotion = targetSquare.endsWith(promotionRank) && piece.toLowerCase().startsWith("p");
-    let promotion = wantsPromotion ? pickPromotion() || undefined : undefined;
-    if (wantsPromotion && !promotion) return false;
-    const move = chessRef.current.move({ from: sourceSquare, to: targetSquare, promotion });
+    const selected = selectMoveWithPromotion(sourceSquare, targetSquare);
+    if (!selected) return false;
+    const move = chessRef.current.move(selected);
     if (!move) return false;
-    const uci = `${sourceSquare}${targetSquare}${promotion || ""}`;
+    const promotion = move.promotion ? move.promotion : "";
+    const uci = `${sourceSquare}${targetSquare}${promotion}`;
     setFen(chessRef.current.fen());
     applyNotation(uci);
     try {
@@ -274,6 +283,10 @@ function ComputerPage() {
     await refreshAnalysis(session.session_id);
     if (response.result) {
       setStatusText(response.message || `Game over (${response.result})`);
+      setGameBanner({
+        title: response.winner === "player" ? "Victory" : response.winner === "engine" ? "Defeat" : "Draw",
+        message: response.message || response.result,
+      });
     }
   };
 
@@ -311,6 +324,12 @@ function ComputerPage() {
                 customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
               />
             </div>
+            {gameBanner && (
+              <div className="game-banner">
+                <strong>{gameBanner.title}</strong>
+                <span className="muted">{gameBanner.message}</span>
+              </div>
+            )}
             <div className="clock-bar bottom-clock">
               <span className="pill">{formatMs(playerMs)}</span>
               <div className="player-meta">

@@ -17,6 +17,9 @@ function MultiplayerPage() {
   const notationRef = useRef(new Chess());
   const streamRef = useRef(null);
   const pollRef = useRef(null);
+  const tickRef = useRef(null);
+  const baseClocksRef = useRef(DEFAULT_TIME_CONTROL);
+  const lastSyncRef = useRef(Date.now());
 
   const [form, setForm] = useState(queueDefaults);
   const [sessionId, setSessionId] = useState("");
@@ -24,6 +27,7 @@ function MultiplayerPage() {
   const [queueStatus, setQueueStatus] = useState("Not queued.");
   const [fen, setFen] = useState(chessRef.current.fen());
   const [clocks, setClocks] = useState(DEFAULT_TIME_CONTROL);
+  const [liveClocks, setLiveClocks] = useState(DEFAULT_TIME_CONTROL);
   const [movePairs, setMovePairs] = useState([]);
   const [message, setMessage] = useState("");
   const [matchInfo, setMatchInfo] = useState("");
@@ -80,7 +84,7 @@ function MultiplayerPage() {
           const { uci, game_state, clocks: updatedClocks } = data.payload;
           chessRef.current.load(game_state.fen);
           setFen(game_state.fen);
-          setClocks(updatedClocks || clocks);
+          if (updatedClocks) updateClocks(updatedClocks);
           applyNotation(uci);
         }
         if (data.type === "game_over" && data.payload?.game_state?.fen) {
@@ -123,7 +127,7 @@ function MultiplayerPage() {
     chessRef.current.load(detail.fen);
     setFen(detail.fen);
     rebuildNotation(detail.moves || []);
-    setClocks(detail.clocks || DEFAULT_TIME_CONTROL);
+    updateClocks(detail.clocks || DEFAULT_TIME_CONTROL);
     connectStream(id);
   };
 
@@ -165,19 +169,24 @@ function MultiplayerPage() {
     if (!sessionId) return false;
     const turn = chessRef.current.turn() === "w" ? "white" : "black";
     if (turn !== playerColor) return false;
-    const promotionRank = piece.startsWith("w") ? "8" : "1";
-    const wantsPromotion = targetSquare.endsWith(promotionRank) && piece.toLowerCase().startsWith("p");
-    const promotion = wantsPromotion
-      ? (() => {
-          const choice = window.prompt("Promote to (q, r, b, n):", "q")?.toLowerCase();
-          if (!choice || !["q", "r", "b", "n"].includes(choice)) return null;
-          return choice;
-        })()
-      : undefined;
-    if (wantsPromotion && !promotion) return false;
-    const move = chessRef.current.move({ from: sourceSquare, to: targetSquare, promotion });
+    const candidates = chessRef.current
+      .moves({ verbose: true })
+      .filter((m) => m.from === sourceSquare && m.to === targetSquare);
+    if (!candidates.length) return false;
+    const promoMoves = candidates.filter((m) => m.promotion);
+    let selected = candidates[0];
+    if (promoMoves.length) {
+      if (promoMoves.length === 1) {
+        selected = promoMoves[0];
+      } else {
+        const options = promoMoves.map((m) => m.promotion).filter(Boolean);
+        const choice = window.prompt(`Promote to (${options.join(", ")}):`, "q")?.toLowerCase();
+        selected = promoMoves.find((m) => m.promotion === choice) || promoMoves[0];
+      }
+    }
+    const move = chessRef.current.move(selected);
     if (!move) return false;
-    const uci = `${sourceSquare}${targetSquare}${promotion || ""}`;
+    const uci = `${sourceSquare}${targetSquare}${move.promotion || ""}`;
     const prevFen = chessRef.current.fen();
     setFen(prevFen);
     applyNotation(uci);
@@ -192,7 +201,7 @@ function MultiplayerPage() {
         chessRef.current.load(res.game_state.fen);
         setFen(res.game_state.fen);
       }
-      setClocks(res.clocks || clocks);
+      updateClocks(res.clocks || clocks);
       if (res.result) {
         setMessage(res.message || "Game finished.");
       }
@@ -234,6 +243,34 @@ function MultiplayerPage() {
     }
   };
 
+  const updateClocks = (newClocks) => {
+    baseClocksRef.current = newClocks;
+    lastSyncRef.current = Date.now();
+    setClocks(newClocks);
+    setLiveClocks(newClocks);
+  };
+
+  useEffect(() => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+    }
+    tickRef.current = setInterval(() => {
+      const base = baseClocksRef.current;
+      const elapsed = Date.now() - lastSyncRef.current;
+      const turn = chessRef.current.turn() === "w" ? "white" : "black";
+      const next = { ...base };
+      if (turn === "white") {
+        next.player_ms = Math.max(0, (base.player_ms ?? 0) - elapsed);
+      } else {
+        next.engine_ms = Math.max(0, (base.engine_ms ?? 0) - elapsed);
+      }
+      setLiveClocks(next);
+    }, 1000);
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+    };
+  }, [sessionId]);
+
   return (
     <div className="app">
       <div className="page-grid">
@@ -243,7 +280,9 @@ function MultiplayerPage() {
               <div className="player-meta">
                 <span className="muted">{playerColor === "white" ? "Opponent (Black)" : "Opponent (White)"}</span>
               </div>
-              <span className="pill">{formatMs(playerColor === "white" ? clocks.engine_ms : clocks.player_ms)}</span>
+              <span className="pill">
+                {formatMs(playerColor === "white" ? liveClocks.engine_ms : liveClocks.player_ms)}
+              </span>
             </div>
             <div className="board-shell-react">
               <Chessboard
@@ -256,7 +295,9 @@ function MultiplayerPage() {
               />
             </div>
             <div className="clock-bar bottom-clock">
-              <span className="pill">{formatMs(playerColor === "white" ? clocks.player_ms : clocks.engine_ms)}</span>
+              <span className="pill">
+                {formatMs(playerColor === "white" ? liveClocks.player_ms : liveClocks.engine_ms)}
+              </span>
               <div className="player-meta">
                 <strong>You</strong>
                 <span className="muted">{playerColor === "white" ? "White" : "Black"}</span>
