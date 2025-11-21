@@ -418,9 +418,6 @@ class SessionRepository:
                 player_white_id=record.player_white_id,
                 player_black_id=record.player_black_id,
                 is_multiplayer=True,
-                player_rating=record.player_rating,
-                player_rating_delta=record.player_rating_delta,
-                player_id=record.player_id,
             )
             db.add(db_model)
             db.commit()
