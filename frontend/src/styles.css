@@ -262,15 +262,7 @@ body {
 
 .side-stack {
   display: grid;
-  grid-template-rows: auto auto 1fr 1fr 1fr;
-  gap: 0.75rem;
-  min-height: 0;
-  height: 100%;
-}
-
-.side-stack {
-  display: grid;
-  grid-template-rows: auto auto 1fr 1fr;
+  grid-template-rows: auto 1fr;
   gap: 0.75rem;
   min-height: 0;
   height: 100%;
@@ -294,6 +286,43 @@ body {
   flex-direction: column;
   gap: 0.75rem;
   overflow: hidden;
+}
+
+.tab-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b1326;
+  border-color: transparent;
+}
+
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 0.75rem;
 }
 
 .landing {

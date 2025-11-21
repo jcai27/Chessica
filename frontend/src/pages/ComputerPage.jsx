@@ -18,6 +18,7 @@ function ComputerPage() {
   const [movePairs, setMovePairs] = useState([]);
   const [coachSummary, setCoachSummary] = useState("");
   const [coachLoading, setCoachLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("controls");
   const [colorChoice, setColorChoice] = useState("auto");
   const [exploitMode, setExploitMode] = useState("auto");
   const [difficulty, setDifficulty] = useState("advanced");
@@ -309,130 +310,141 @@ function ComputerPage() {
             <span className="pill">{session ? "Active" : "Setup"}</span>
           </header>
 
-          <section className="card controls">
-            <form className="controls-form" onSubmit={handleStart}>
-              <label className="select-field">
-                <span>Color</span>
-                <select value={colorChoice} onChange={(e) => setColorChoice(e.target.value)}>
-                  <option value="auto">Auto</option>
-                  <option value="white">White</option>
-                  <option value="black">Black</option>
-                </select>
-              </label>
-              <label className="select-field">
-                <span>Exploit Mode</span>
-                <select value={exploitMode} onChange={(e) => setExploitMode(e.target.value)}>
-                  <option value="auto">Auto</option>
-                  <option value="on">On</option>
-                  <option value="off">Off</option>
-                </select>
-              </label>
-              <label className="select-field">
-                <span>Difficulty</span>
-                <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-                  {DIFFICULTY_PRESETS.map((preset) => (
-                    <option key={preset.key} value={preset.key}>
-                      {preset.name} (~{preset.rating})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="difficulty-indicator">
-                <span>{describePreset(difficulty)}</span>
-              </div>
-              <button type="submit" disabled={pending}>
-                {pending ? "Starting..." : session ? "Restart Session" : "Start Session"}
-              </button>
-            </form>
-          </section>
-
-          <section className="card insight-card">
-            <div className="card-header">
-              <div>
-                <h2>Move List</h2>
-                <span>Player / Engine</span>
-              </div>
-            </div>
-            <ol className="analysis-list">
-              {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
-              {movePairs.map((pair) => (
-                <li key={pair.number} className="analysis-item">
-                  <strong>
-                    {pair.number}. {pair.white || "..."} {pair.black || "..."}
-                  </strong>
-                </li>
+          <section className="card tab-card">
+            <div className="tab-bar">
+              {[
+                { key: "controls", label: "Controls" },
+                { key: "moves", label: "Move List" },
+                { key: "analysis", label: "Analysis" },
+                { key: "coach", label: "Coach Insight" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`tab-button ${activeTab === tab.key ? "active" : ""}`}
+                  onClick={() => setActiveTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
               ))}
-            </ol>
-          </section>
-
-          <section className="card insight-card">
-            <div className="card-header">
-              <div>
-                <h2>Analysis</h2>
-                <span className="muted">Themes, evals, and exploit deltas</span>
-              </div>
-              <button type="button" className="secondary" disabled={!session?.session_id} onClick={() => refreshAnalysis(session?.session_id)}>
-                Refresh
-              </button>
             </div>
-            <div className="insight-section">
-              {analysisSummary && (
-                <div className="summary-block">
-                  <div className="panel-title">
-                    <strong>Induced blunders</strong>
-                    <span className="pill">{analysisSummary.induced_blunders}</span>
+
+            <div className="tab-panel">
+              {activeTab === "controls" && (
+                <form className="controls-form" onSubmit={handleStart}>
+                  <label className="select-field">
+                    <span>Color</span>
+                    <select value={colorChoice} onChange={(e) => setColorChoice(e.target.value)}>
+                      <option value="auto">Auto</option>
+                      <option value="white">White</option>
+                      <option value="black">Black</option>
+                    </select>
+                  </label>
+                  <label className="select-field">
+                    <span>Exploit Mode</span>
+                    <select value={exploitMode} onChange={(e) => setExploitMode(e.target.value)}>
+                      <option value="auto">Auto</option>
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
+                  <label className="select-field">
+                    <span>Difficulty</span>
+                    <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+                      {DIFFICULTY_PRESETS.map((preset) => (
+                        <option key={preset.key} value={preset.key}>
+                          {preset.name} (~{preset.rating})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="difficulty-indicator">
+                    <span>{describePreset(difficulty)}</span>
                   </div>
-                  <div className="panel-title">
-                    <strong>Eval tradeoff</strong>
-                    <span className="pill">{analysisSummary.eval_tradeoff_cp} cp</span>
-                  </div>
-                  <div className="tag-row">
-                    {(analysisSummary.themes || []).map((theme) => (
-                      <span key={theme} className="tag">
-                        {theme}
-                      </span>
+                  <button type="submit" disabled={pending}>
+                    {pending ? "Starting..." : session ? "Restart Session" : "Start Session"}
+                  </button>
+                </form>
+              )}
+
+              {activeTab === "moves" && (
+                <ol className="analysis-list">
+                  {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
+                  {movePairs.map((pair) => (
+                    <li key={pair.number} className="analysis-item">
+                      <strong>
+                        {pair.number}. {pair.white || "..."} {pair.black || "..."}
+                      </strong>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {activeTab === "analysis" && (
+                <div className="stack">
+                  {analysisSummary && (
+                    <div className="summary-block">
+                      <div className="panel-title">
+                        <strong>Induced blunders</strong>
+                        <span className="pill">{analysisSummary.induced_blunders}</span>
+                      </div>
+                      <div className="panel-title">
+                        <strong>Eval tradeoff</strong>
+                        <span className="pill">{analysisSummary.eval_tradeoff_cp} cp</span>
+                      </div>
+                      <div className="tag-row">
+                        {(analysisSummary.themes || []).map((theme) => (
+                          <span key={theme} className="tag">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!session?.session_id}
+                    onClick={() => refreshAnalysis(session?.session_id)}
+                  >
+                    Refresh
+                  </button>
+                  <ul className="analysis-list">
+                    {analysis.length === 0 && <li className="muted">No annotated moves yet.</li>}
+                    {analysis.map((move) => (
+                      <li key={`${move.ply}-${move.player_move}-${move.engine_reply}`} className="analysis-item">
+                        <strong>
+                          {move.ply}. {move.player_move || "..."} → {move.engine_reply || "..."}
+                        </strong>
+                        <div className="muted">
+                          Eval {formatEval(move.objective_eval_cp)} · Exploit {formatEval(move.exploit_gain_cp)}
+                        </div>
+                        <div className="tag-row">
+                          {move.motifs?.map((motif) => (
+                            <span key={motif} className="tag">
+                              {motif}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="muted">{move.explanation}</p>
+                      </li>
                     ))}
+                  </ul>
+                </div>
+              )}
+
+              {activeTab === "coach" && (
+                <div className="stack">
+                  <button type="button" disabled={!session?.session_id || coachLoading} onClick={runCoachSummary}>
+                    {coachLoading ? "Generating..." : "Explain Position"}
+                  </button>
+                  <div className="insight-eval">
+                    <div className="eval-score">{formatEval(latestEval ?? 0)}</div>
+                    <span>{describeEval(latestEval ?? 0)}</span>
+                    <p className="muted">{coachSummary || "No coach summary yet."}</p>
                   </div>
                 </div>
               )}
-              <ul className="analysis-list">
-                {analysis.length === 0 && <li className="muted">No annotated moves yet.</li>}
-                {analysis.map((move) => (
-                  <li key={`${move.ply}-${move.player_move}-${move.engine_reply}`} className="analysis-item">
-                    <strong>
-                      {move.ply}. {move.player_move || "..."} → {move.engine_reply || "..."}
-                    </strong>
-                    <div className="muted">
-                      Eval {formatEval(move.objective_eval_cp)} · Exploit {formatEval(move.exploit_gain_cp)}
-                    </div>
-                    <div className="tag-row">
-                      {move.motifs?.map((motif) => (
-                        <span key={motif} className="tag">
-                          {motif}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="muted">{move.explanation}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
-          <section className="card insight-card">
-            <div className="card-header">
-              <div>
-                <h2>Coach & Insight</h2>
-                <span className="muted">Explain the current position in plain English.</span>
-              </div>
-              <button type="button" disabled={!session?.session_id || coachLoading} onClick={runCoachSummary}>
-                {coachLoading ? "Generating..." : "Explain Position"}
-              </button>
-            </div>
-            <div className="insight-eval">
-              <div className="eval-score">{formatEval(latestEval ?? 0)}</div>
-              <span>{describeEval(latestEval ?? 0)}</span>
-              <p className="muted">{coachSummary || "No coach summary yet."}</p>
             </div>
           </section>
         </div>
