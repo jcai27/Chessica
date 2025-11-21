@@ -177,8 +177,6 @@ class SessionRecord:
             is_multiplayer=self.is_multiplayer,
             player_white_id=self.player_white_id,
             player_black_id=self.player_black_id,
-            player_rating=self.player_rating,
-            player_rating_delta=self.player_rating_delta,
         )
 
     def to_multiplayer_response(self) -> MultiplayerSessionResponse:
