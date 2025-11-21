@@ -213,15 +213,14 @@ function MultiplayerPage() {
   return (
     <div className="app">
       <div className="page-grid">
-        <section className="card board-card">
-          <div className="card-header">
-            <div>
-              <h2>Live Board</h2>
-              <span className="muted">{matchInfo || "No match yet."}</span>
-            </div>
-            <span className="status-chip">{sessionId ? `Session ${sessionId}` : "Idle"}</span>
-          </div>
+        <section className="card board-card minimal">
           <div className="board-wrap">
+            <div className="clock-bar top-clock">
+              <div className="player-meta">
+                <span className="muted">{playerColor === "white" ? "Opponent (Black)" : "Opponent (White)"}</span>
+              </div>
+              <span className="pill">{formatMs(playerColor === "white" ? clocks.engine_ms : clocks.player_ms)}</span>
+            </div>
             <div className="board-shell-react">
               <Chessboard
                 id="multiplayer-board"
@@ -229,22 +228,17 @@ function MultiplayerPage() {
                 onPieceDrop={handleDrop}
                 boardOrientation={playerColor}
                 animationDuration={150}
-                customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
+                customBoardStyle={{ borderRadius: 12, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
               />
             </div>
-            <div className="two-col">
-              <div className="summary-block">
+            <div className="clock-bar bottom-clock">
+              <span className="pill">{formatMs(playerColor === "white" ? clocks.player_ms : clocks.engine_ms)}</span>
+              <div className="player-meta">
                 <strong>You</strong>
-                <div className="muted">{playerColor === "white" ? "White" : "Black"}</div>
-                <div className="pill">{formatMs(clocks.player_ms)}</div>
-              </div>
-              <div className="summary-block">
-                <strong>Opponent</strong>
-                <div className="muted">{playerColor === "white" ? "Black" : "White"}</div>
-                <div className="pill">{formatMs(clocks.engine_ms)}</div>
+                <span className="muted">{playerColor === "white" ? "White" : "Black"}</span>
               </div>
             </div>
-            <div className="inline-actions">
+            <div className="inline-actions compact">
               <button type="button" className="secondary" disabled={!sessionId} onClick={() => action("resign")}>
                 Resign
               </button>
@@ -254,7 +248,7 @@ function MultiplayerPage() {
               <button type="button" className="secondary" disabled={!sessionId} onClick={() => action("abort")}>
                 Abort
               </button>
-              <span className="muted">{message}</span>
+              <span className="muted tiny">{message || matchInfo || queueStatus}</span>
             </div>
           </div>
         </section>
@@ -268,76 +262,90 @@ function MultiplayerPage() {
               <div>
                 <h1>Online Play</h1>
                 <p>Queue for opponents, stream moves, and keep clocks in sync.</p>
+                <small className="muted">{sessionId ? `Session ${sessionId}` : "Not matched"}</small>
               </div>
             </div>
             <span className="pill">Multiplayer</span>
           </header>
 
-          <section className="card controls">
-            <form className="controls-form" onSubmit={handleQueue}>
-              <label className="select-field">
-                <span>Player ID</span>
-                <input
-                  type="text"
-                  value={form.player_id}
-                  required
-                  onChange={(e) => setForm((prev) => ({ ...prev, player_id: e.target.value }))}
-                  placeholder="your-handle"
-                />
-              </label>
-              <label className="select-field">
-                <span>Color</span>
-                <select value={form.color} onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}>
-                  <option value="auto">Auto</option>
-                  <option value="white">White</option>
-                  <option value="black">Black</option>
-                </select>
-              </label>
-              <label className="select-field">
-                <span>Initial (ms)</span>
-                <input
-                  type="number"
-                  value={form.initial_ms}
-                  onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
-                  min="60000"
-                  step="60000"
-                />
-              </label>
-              <label className="select-field">
-                <span>Increment (ms)</span>
-                <input
-                  type="number"
-                  value={form.increment_ms}
-                  onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
-                  min="0"
-                  step="1000"
-                />
-              </label>
-              <button type="submit">Join Queue</button>
-              <button type="button" className="secondary" onClick={leaveQueue}>
-                Leave Queue
+          <section className="card tab-card">
+            <div className="tab-bar">
+              <button
+                type="button"
+                className="tab-button active"
+                aria-current="true"
+              >
+                Match
               </button>
-            </form>
-            <div className="difficulty-indicator">{queueStatus}</div>
-          </section>
+            </div>
+            <div className="tab-panel">
+              <form className="controls-form" onSubmit={handleQueue}>
+                <label className="select-field">
+                  <span>Player ID</span>
+                  <input
+                    type="text"
+                    value={form.player_id}
+                    required
+                    onChange={(e) => setForm((prev) => ({ ...prev, player_id: e.target.value }))}
+                    placeholder="your-handle"
+                  />
+                </label>
+                <label className="select-field">
+                  <span>Color</span>
+                  <select value={form.color} onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}>
+                    <option value="auto">Auto</option>
+                    <option value="white">White</option>
+                    <option value="black">Black</option>
+                  </select>
+                </label>
+                <label className="select-field">
+                  <span>Initial (ms)</span>
+                  <input
+                    type="number"
+                    value={form.initial_ms}
+                    onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
+                    min="60000"
+                    step="60000"
+                  />
+                </label>
+                <label className="select-field">
+                  <span>Increment (ms)</span>
+                  <input
+                    type="number"
+                    value={form.increment_ms}
+                    onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
+                    min="0"
+                    step="1000"
+                  />
+                </label>
+                <div className="difficulty-indicator">{queueStatus}</div>
+                <div className="inline-actions compact">
+                  <button type="submit">Join Queue</button>
+                  <button type="button" className="secondary" onClick={leaveQueue}>
+                    Leave Queue
+                  </button>
+                </div>
+              </form>
 
-          <section className="card insight-card">
-            <div className="card-header">
-              <div>
-                <h2>Move Log</h2>
-                <span className="muted">Both players</span>
+              <div className="card insight-card">
+                <div className="card-header">
+                  <div>
+                    <h2>Move Log</h2>
+                    <span className="muted">Both players</span>
+                  </div>
+                </div>
+                <ol className="analysis-list">
+                  {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
+                  {movePairs.map((pair) => (
+                    <li key={pair.number} className="analysis-item">
+                      <strong>
+                        {pair.number}. {pair.white || "..."} {pair.black || "..."}
+                      </strong>
+                    </li>
+                  ))}
+                </ol>
               </div>
             </div>
-            <ol className="analysis-list">
-              {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
-              {movePairs.map((pair) => (
-                <li key={pair.number} className="analysis-item">
-                  <strong>
-                    {pair.number}. {pair.white || "..."} {pair.black || "..."}
-                  </strong>
-                </li>
-              ))}
-            </ol>
           </section>
         </div>
       </div>

@@ -6,6 +6,17 @@ import { API_BASE, DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
 import { DIFFICULTY_PRESETS, describePreset } from "../lib/difficulties";
 import { describeEval, formatEval } from "../lib/format";
 
+const parseCoachSummary = (summary) => {
+  const text = (summary || "").trim();
+  if (!text) return [];
+  const byNewline = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (byNewline.length > 1) return byNewline;
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+};
+
 function ComputerPage() {
   const chessRef = useRef(new Chess());
   const notationRef = useRef(new Chess());
@@ -26,6 +37,7 @@ function ComputerPage() {
   const [pending, setPending] = useState(false);
   const [latestEval, setLatestEval] = useState(null);
   const [message, setMessage] = useState("");
+  const coachLines = useMemo(() => parseCoachSummary(coachSummary), [coachSummary]);
 
   useEffect(() => {
     return () => {
@@ -441,7 +453,15 @@ function ComputerPage() {
                   <div className="insight-eval">
                     <div className="eval-score">{formatEval(latestEval ?? 0)}</div>
                     <span>{describeEval(latestEval ?? 0)}</span>
-                    <p className="muted">{coachSummary || "No coach summary yet."}</p>
+                    {coachLines.length ? (
+                      <ul className="coach-lines">
+                        {coachLines.map((line, idx) => (
+                          <li key={`${line}-${idx}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted">No coach summary yet.</p>
+                    )}
                   </div>
                 </div>
               )}

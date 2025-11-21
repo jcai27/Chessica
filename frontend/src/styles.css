@@ -320,6 +320,32 @@ body {
   gap: 0.75rem;
 }
 
+.coach-lines {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--text);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.clock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+}
+
+.clock-bar .pill {
+  margin: 0;
+}
+
+.player-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
 .landing {
   height: 100%;
   display: grid;
