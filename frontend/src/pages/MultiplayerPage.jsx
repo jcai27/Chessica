@@ -3,7 +3,7 @@ import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { api } from "../lib/api";
 import { DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
-import { formatEval, describeEval, formatMs } from "../lib/format";
+import { formatMs } from "../lib/format";
 
 const queueDefaults = {
   player_id: "",
@@ -27,8 +27,6 @@ function MultiplayerPage() {
   const [movePairs, setMovePairs] = useState([]);
   const [message, setMessage] = useState("");
   const [matchInfo, setMatchInfo] = useState("");
-  const [analysis, setAnalysis] = useState([]);
-  const [analysisSummary, setAnalysisSummary] = useState(null);
   const [coachSummary, setCoachSummary] = useState("");
   const [coachLoading, setCoachLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("match");
@@ -127,7 +125,6 @@ function MultiplayerPage() {
     rebuildNotation(detail.moves || []);
     setClocks(detail.clocks || DEFAULT_TIME_CONTROL);
     connectStream(id);
-    await refreshAnalysis(id);
   };
 
   const handleQueue = async (event) => {
