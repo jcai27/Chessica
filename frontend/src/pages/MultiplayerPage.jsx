@@ -223,17 +223,6 @@ function MultiplayerPage() {
     }
   };
 
-  const refreshAnalysis = async (id) => {
-    if (!id) return;
-    try {
-      const data = await api.analysis(id);
-      setAnalysis(data.moves || []);
-      setAnalysisSummary(data.summary || null);
-    } catch (err) {
-      setMessage(err.message);
-    }
-  };
-
   const runCoach = async () => {
     if (!sessionId) return;
     setCoachLoading(true);
@@ -311,7 +300,6 @@ function MultiplayerPage() {
               {[
                 { key: "match", label: "Match" },
                 { key: "moves", label: "Move List" },
-                { key: "analysis", label: "Analysis" },
                 { key: "coach", label: "Coach Insight" },
               ].map((tab) => (
                 <button
@@ -388,54 +376,6 @@ function MultiplayerPage() {
                 </ol>
               )}
 
-              {activeTab === "analysis" && (
-                <div className="stack">
-                  {analysisSummary && (
-                    <div className="summary-block">
-                      <div className="panel-title">
-                        <strong>Induced blunders</strong>
-                        <span className="pill">{analysisSummary.induced_blunders}</span>
-                      </div>
-                      <div className="panel-title">
-                        <strong>Eval tradeoff</strong>
-                        <span className="pill">{analysisSummary.eval_tradeoff_cp} cp</span>
-                      </div>
-                      <div className="tag-row">
-                        {(analysisSummary.themes || []).map((theme) => (
-                          <span key={theme} className="tag">
-                            {theme}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <button type="button" className="secondary" disabled={!sessionId} onClick={() => refreshAnalysis(sessionId)}>
-                    Refresh
-                  </button>
-                  <ul className="analysis-list">
-                    {analysis.length === 0 && <li className="muted">No annotated moves yet.</li>}
-                    {analysis.map((move) => (
-                      <li key={`${move.ply}-${move.player_move}-${move.engine_reply}`} className="analysis-item">
-                        <strong>
-                          {move.ply}. {move.player_move || "..."} → {move.engine_reply || "..."}
-                        </strong>
-                        <div className="muted">
-                          Eval {formatEval(move.objective_eval_cp)} · Exploit {formatEval(move.exploit_gain_cp)}
-                        </div>
-                        <div className="tag-row">
-                          {move.motifs?.map((motif) => (
-                            <span key={motif} className="tag">
-                              {motif}
-                            </span>
-                          ))}
-                        </div>
-                        <p className="muted">{move.explanation}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               {activeTab === "coach" && (
                 <div className="stack">
                   <button type="button" disabled={!sessionId || coachLoading} onClick={runCoach}>
@@ -446,10 +386,6 @@ function MultiplayerPage() {
                   ) : (
                     <p className="muted">Request a coach summary after moves are played.</p>
                   )}
-                  <div className="insight-eval">
-                    <div className="eval-score">{formatEval(analysisSummary?.eval_tradeoff_cp ?? 0)}</div>
-                    <span>{describeEval(analysisSummary?.eval_tradeoff_cp ?? 0)}</span>
-                  </div>
                 </div>
               )}
             </div>
