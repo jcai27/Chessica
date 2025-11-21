@@ -1,50 +1,13 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Chessica | Home</title>
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css" />
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chessica</title>
   </head>
   <body>
-    <nav class="top-nav">
-      <div class="brand">
-        <span class="brand-logo">♞</span>
-        <span>Chessica</span>
-      </div>
-      <div class="nav-links">
-        <a href="./index.html" class="active">Home</a>
-        <a href="./online.html">Online (WIP)</a>
-        <a href="./computer.html">Vs Computer</a>
-        <a href="./replay.html">Replay</a>
-        <a href="./auth.html">Accounts (WIP)</a>
-      </div>
-    </nav>
-    <div class="landing">
-      <header class="hero landing-hero">
-        <div class="hero-title">
-          <div class="badge">♞</div>
-          <div>
-            <h1>Welcome to Chessica</h1>
-            <p>Pick your arena: battle the Chessica engine or test your prep online.</p>
-          </div>
-        </div>
-        <span class="pill">Alpha</span>
-      </header>
-
-      <section class="cta-grid">
-        <article class="cta-card">
-          <h2>Play vs Computer</h2>
-          <p>Use exploit-aware analysis, live coaching, and precise evaluation breakdowns.</p>
-          <a class="cta-button" href="./computer.html">Launch Control Room</a>
-        </article>
-        <article class="cta-card">
-          <h2>Play Online (WIP)</h2>
-          <p>Queue up for future matchmaking, live spectating, and collaborative prep.</p>
-          <a class="cta-button secondary" href="./online.html">Preview Online Mode</a>
-        </article>
-      </section>
-    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

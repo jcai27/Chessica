@@ -397,20 +397,23 @@ Fields: `exploit_default`, `share_data_opt_in`, notification settings.
 > **Schema note.** If you created `chessica.db` before the difficulty update, delete it (or run `ALTER TABLE sessions ADD COLUMN difficulty TEXT ...`, etc.) so the new columns (`difficulty`, `engine_depth`, `engine_rating`) exist before restarting the server.
 > **Engine defaults.** Tune the backend search depth globally with `ENGINE_DEFAULT_DEPTH` (default 3); per-session overrides are available via the `engine_depth` field or the frontend dropdown.
 
-### 14.3 Frontend Prototype
-The `frontend/` directory contains a lightweight static UI that consumes the backend API.
+### 14.3 Frontend React App (Vite)
+The `frontend/` directory now ships a componentized React UI that bundles chess assets locally (no CDN fetches for `chess.js` or the board).
 
 1. Start the backend server on `localhost:8000`.
-2. Serve the static files (any HTTP server works):
+2. Install and run the React dev server:
    ```bash
    cd frontend
-   python3 -m http.server 4173
+   npm install
+   npm run dev -- --host --port 4173
    ```
-3. Open `http://localhost:4173` and use the controls to create a session. Choose an engine strength (depth 2–5), drag pieces directly on the board (or fall back to the UCI input) to submit moves, then read the explanations and stream output in real time.
-4. Use the **Session Analytics** panel’s “Refresh” button (or make moves) to fetch aggregated telemetry via `GET /api/v1/analytics/sessions/{id}/events`.
+3. Open `http://localhost:4173` and use the routed pages:
+   - `/computer`: vs-computer control room with difficulty presets, coach summaries, and analysis refresh.
+   - `/multiplayer`: matchmaking queue, live board, and resign/draw/abort controls.
+   - `/replay`: load any session id, scrub moves, copy share links, and download PGN.
+4. Build production assets with `npm run build` (outputs to `frontend/dist` for static hosting).
 
-> This prototype avoids build tooling; React/Vite can replace it later if desired.
-> The board uses [`chessboard-element`](https://github.com/justinfagnani/chessboard-element) and [`chess.js`](https://github.com/jhlywa/chess.js) via CDN, so ensure the frontend machine has internet access the first time it loads.
+Legacy static HTML files remain in `frontend/` for reference, but the React app is the primary UI.
 
 ### 14.4 Next Development Targets
 1. Replace the mock engine/explanation pipeline with the real policy/value service + opponent model (GPU-backed inference + MCTS tie-in).
