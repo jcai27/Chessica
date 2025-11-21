@@ -20,6 +20,7 @@
         <a href="./online.html" class="active">Online</a>
         <a href="./computer.html">Vs Computer</a>
         <a href="./replay.html">Replay</a>
+        <a href="./auth.html">Accounts (WIP)</a>
       </div>
     </nav>
     <div class="app">
@@ -68,8 +69,14 @@
             <h2>Live Board</h2>
             <span id="matchInfo">No match yet.</span>
           </div>
-          <div class="board-shell">
+          <div class="status-banner" id="connectionBanner" hidden>Connected</div>
+          <div class="board-shell theme-night" id="onlineBoardShell">
             <chess-board id="onlineBoard" draggable-pieces coordinates></chess-board>
+            <div class="move-highlight" id="onlineMoveHighlight"></div>
+            <div class="board-overlay" id="boardOverlay" hidden>
+              <div class="board-overlay__spinner"></div>
+              <div class="board-overlay__text" id="boardOverlayText">Matching…</div>
+            </div>
           </div>
           <div class="insight-section">
             <h3>Session</h3>

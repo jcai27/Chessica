@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     coach_llm_model: str = "mistral:instruct"
     coach_rate_limit_window: float = 60.0
     coach_rate_limit_max: int = 10
+    auth_feature_enabled: bool = True
 
 
 settings = Settings()

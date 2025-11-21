@@ -23,11 +23,15 @@ const state = {
   latestEvalCp: null,
   coachSummary: null,
   coachSummaryLoading: false,
+  boardTheme: "night",
+  pieceStyle: "classic",
+  animatePieces: true,
 };
 
 const refs = {
   board: document.getElementById("board"),
   moveList: document.getElementById("moveList"),
+  moveHighlight: document.getElementById("computerMoveHighlight"),
   insightSummary: document.getElementById("insightSummary"),
   insightDetails: document.getElementById("insightDetails"),
   evalScore: document.getElementById("evalScore"),
@@ -50,6 +54,10 @@ const refs = {
   copyLinkBtn: document.getElementById("copyLinkBtn"),
   openReplayBtn: document.getElementById("openReplayBtn"),
   downloadPgnBtn: document.getElementById("downloadPgnBtn"),
+  boardThemeSelect: document.getElementById("boardThemeSelect"),
+  pieceStyleSelect: document.getElementById("pieceStyleSelect"),
+  animatePiecesToggle: document.getElementById("animatePiecesToggle"),
+  boardShell: document.getElementById("boardShell"),
 };
 
 function log(message) {
@@ -84,9 +92,58 @@ function updateDifficultyNote() {
   refs.difficultyNote.textContent = `${option.textContent} (depth ${depth || "?"})`;  
 }
 
+function applyAppearance() {
+  const shell = refs.boardShell;
+  if (shell) {
+    shell.classList.remove("theme-night", "theme-classic", "theme-forest", "theme-sand");
+    shell.classList.add(`theme-${state.boardTheme}`);
+  }
+  if (refs.board) {
+    refs.board.classList.remove("pieces-classic", "pieces-mono", "pieces-neon");
+    refs.board.classList.add(`pieces-${state.pieceStyle}`);
+    refs.board.classList.toggle("animate-pieces", state.animatePieces);
+  }
+}
+
+function hideMoveHighlight() {
+  if (refs.moveHighlight) {
+    refs.moveHighlight.classList.remove("visible");
+  }
+}
+
+function showMoveHighlight() {
+  const highlight = refs.moveHighlight;
+  if (!highlight || !refs.boardShell) return;
+  highlight.style.left = "0";
+  highlight.style.top = "0";
+  highlight.style.width = "100%";
+  highlight.style.height = "100%";
+  highlight.classList.add("visible");
+  setTimeout(() => hideMoveHighlight(), 200);
+}
+
+let audioCtx;
+function playMoveSound(captured = false) {
+  const freq = captured ? 520 : 760;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    gain.gain.value = 0.08;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+  } catch {
+    // ignore
+  }
+}
+
 function renderBoard() {
   refs.board.setAttribute("orientation", state.playerColor);
   refs.board.setAttribute("position", state.chess.fen());
+  hideMoveHighlight();
   updatePositionDescriptor();
 }
 
@@ -600,6 +657,8 @@ async function submitMove(uciValue, { bypassTurnCheck = false, suppressAlerts = 
   };
   state.chess.load(response.game_state.fen);
   renderBoard();
+  playMoveSound(false);
+  showMoveHighlight();
   updateTendencies(response.opponent_profile);
   updateInsightFromResponse(response);
 
@@ -692,6 +751,30 @@ if (refs.difficultySelect) {
   updateDifficultyNote();
 }
 
+if (refs.boardThemeSelect) {
+  refs.boardThemeSelect.addEventListener("change", (event) => {
+    state.boardTheme = event.target.value || "night";
+    applyAppearance();
+  });
+}
+
+if (refs.pieceStyleSelect) {
+  refs.pieceStyleSelect.addEventListener("change", (event) => {
+    state.pieceStyle = event.target.value || "classic";
+    applyAppearance();
+  });
+}
+
+if (refs.animatePiecesToggle) {
+  state.animatePieces = refs.animatePiecesToggle.checked;
+  refs.animatePiecesToggle.addEventListener("change", (event) => {
+    state.animatePieces = event.target.checked;
+    applyAppearance();
+  });
+}
+
+applyAppearance();
+
 if (refs.copyLinkBtn) {
   refs.copyLinkBtn.addEventListener("click", copyShareLink);
 }
@@ -747,6 +830,7 @@ refs.board.addEventListener("drop", async (event) => {
   try {
     await submitMove(uci);
     setAction("move");
+    showMoveHighlight();
   } catch {
     setAction("snapback");
   }

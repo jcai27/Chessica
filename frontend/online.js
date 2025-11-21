@@ -32,6 +32,10 @@ const refs = {
   blackClockProgress: document.getElementById("blackClockProgress"),
   moveEmptyState: document.getElementById("moveEmptyState"),
   messagesEmptyState: document.getElementById("messagesEmptyState"),
+  boardOverlay: document.getElementById("boardOverlay"),
+  boardOverlayText: document.getElementById("boardOverlayText"),
+  connectionBanner: document.getElementById("connectionBanner"),
+  moveHighlight: document.getElementById("onlineMoveHighlight"),
 };
 
 const state = {
@@ -47,6 +51,7 @@ const state = {
   heartbeatTimer: null,
   reconnectTimer: null,
   reconnectAttempts: 0,
+  pendingMove: null,
 };
 
 function setStatus(text) {
@@ -71,6 +76,30 @@ function hideEmptyState(el) {
 
 function showEmptyState(el) {
   if (el) el.style.display = "flex";
+}
+
+function showBoardOverlay(text) {
+  if (!refs.boardOverlay || !refs.boardOverlayText) return;
+  refs.boardOverlayText.textContent = text || "Loading…";
+  refs.boardOverlay.hidden = false;
+}
+
+function hideBoardOverlay() {
+  if (!refs.boardOverlay) return;
+  refs.boardOverlay.hidden = true;
+}
+
+function setConnectionBanner(text, tone = "warn") {
+  if (!refs.connectionBanner) return;
+  refs.connectionBanner.textContent = text;
+  refs.connectionBanner.hidden = false;
+  refs.connectionBanner.classList.toggle("is-good", tone === "good");
+  refs.connectionBanner.classList.toggle("is-bad", tone === "bad");
+}
+
+function hideConnectionBanner() {
+  if (!refs.connectionBanner) return;
+  refs.connectionBanner.hidden = true;
 }
 
 function updateClockLabels() {
@@ -134,11 +163,84 @@ function setClockProgress(color, remainingMs) {
   progressEl.style.transform = `scaleX(${ratio})`;
 }
 
+function playMoveHighlight() {
+  const highlight = refs.moveHighlight;
+  if (!highlight || !refs.board) return;
+  highlight.style.left = "0";
+  highlight.style.top = "0";
+  highlight.style.width = "100%";
+  highlight.style.height = "100%";
+  highlight.classList.add("visible");
+  setTimeout(() => {
+    highlight.classList.remove("visible");
+  }, 200);
+}
+
+function applyOptimisticMove(uci) {
+  if (state.pendingMove) return false;
+  const prevFen = state.chess.fen();
+  const move = state.chess.move({
+    from: uci.slice(0, 2),
+    to: uci.slice(2, 4),
+    promotion: uci.slice(4) || undefined,
+  });
+  if (!move) return false;
+  playMoveSound(move.captured);
+  state.pendingMove = {
+    uci,
+    prevFen,
+    prevPairsLen: state.movePairs.length,
+  };
+  addSanMove(move.san, move.color);
+  renderBoard();
+  showBoardOverlay("Sending move…");
+  return true;
+}
+
+function revertPendingMove() {
+  if (!state.pendingMove) return;
+  const { prevFen, prevPairsLen } = state.pendingMove;
+  state.pendingMove = null;
+  state.chess.load(prevFen);
+  state.movePairs = state.movePairs.slice(0, prevPairsLen);
+  renderMoveList();
+  renderBoard();
+  hideBoardOverlay();
+}
+
+function clearPendingMove() {
+  state.pendingMove = null;
+  hideBoardOverlay();
+}
+
+function playMoveSound(captured) {
+  const freq = captured ? 520 : 760;
+  playTone(freq, 0.12);
+}
+
+let audioCtx;
+function playTone(frequency, duration) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = frequency;
+    gain.gain.value = 0.08;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch {
+    // ignore
+  }
+}
+
 function renderBoard() {
   if (!refs.board) return;
   refs.board.setAttribute("position", state.chess.fen());
   refs.board.setAttribute("orientation", state.playerColor);
   updateTurnIndicator();
+  hideMoveHighlight();
 }
 
 function resetMoveList() {
@@ -212,6 +314,10 @@ async function pollStatus() {
     const data = await res.json();
     if (data.status === "matched") {
       handleMatched(data);
+    } else if (data.status === "none") {
+      state.queueing = false;
+      setStatus("Not queued.");
+      hideBoardOverlay();
     }
   } catch {
     // ignore
@@ -229,6 +335,7 @@ function handleMatched(data) {
   setPlayerColor(`Playing as ${state.playerColor}`);
   updateClockLabels();
   logMessage("Matched. Loading session...");
+  hideBoardOverlay();
   loadSessionDetail();
 }
 
@@ -249,6 +356,7 @@ async function loadSessionDetail(sessionId = null) {
   state.sessionId = detail.session_id;
   state.playerColor = detail.player_white_id === state.playerId ? "white" : detail.player_black_id === state.playerId ? "black" : state.playerColor;
   state.initialMs = state.initialMs || Math.max(detail?.clocks?.player_ms ?? 0, detail?.clocks?.engine_ms ?? 0, 300000);
+  state.pendingMove = null;
   state.chess.load(detail.fen);
   resetMoveList();
   (detail.moves || []).forEach((uci) => applyUci(uci));
@@ -258,13 +366,17 @@ async function loadSessionDetail(sessionId = null) {
   setMatchInfo(`Opponent: ${state.player_white_id === state.playerId ? detail.player_black_id : detail.player_white_id || "?"}`);
   renderBoard();
   updateClocks(detail.clocks);
+  hideBoardOverlay();
   connectStream();
 }
 
-async function submitMove(uci) {
+async function submitMove(uci, wasOptimistic = false) {
   if (!state.sessionId || !state.playerId) {
     logMessage("Join a match first.");
     return;
+  }
+  if (!wasOptimistic) {
+    showBoardOverlay("Sending move…");
   }
   const payload = {
     uci,
@@ -278,6 +390,11 @@ async function submitMove(uci) {
   });
   if (!res.ok) {
     logMessage(`Move failed (${res.status})`);
+    if (wasOptimistic) {
+      revertPendingMove();
+    } else {
+      hideBoardOverlay();
+    }
     return;
   }
   const data = await res.json();
@@ -285,6 +402,7 @@ async function submitMove(uci) {
   if (data.clocks) {
     updateClocks(data.clocks);
   }
+  clearPendingMove();
 }
 
 function connectStream() {
@@ -305,6 +423,7 @@ function connectStream() {
   socket.onopen = () => {
     state.reconnectAttempts = 0;
     logMessage("Stream connected.");
+    hideConnectionBanner();
     startHeartbeat();
   };
   socket.onmessage = (event) => {
@@ -316,6 +435,10 @@ function connectStream() {
             updateClocks(data.payload.clocks);
         }
         if (moveUci) {
+          const moveWasPending = state.pendingMove && state.pendingMove.uci === moveUci;
+          if (state.pendingMove && state.pendingMove.uci === moveUci) {
+            clearPendingMove();
+          }
           // Avoid double-applying moves
           const history = state.chess.history({ verbose: true });
           const last = history[history.length - 1];
@@ -330,6 +453,10 @@ function connectStream() {
           if (move) {
             addSanMove(move.san, move.color);
             renderBoard();
+            playMoveSound(move?.captured);
+            if (!moveWasPending) {
+              playMoveHighlight();
+            }
           }
         }
       }
@@ -346,6 +473,7 @@ function connectStream() {
   socket.onerror = () => logMessage("Stream error.");
   socket.onclose = () => {
     logMessage("Stream closed.");
+    setConnectionBanner("Stream disconnected. Reconnecting…", "warn");
     stopHeartbeat();
     scheduleReconnect();
   };
@@ -395,6 +523,11 @@ if (refs.board) {
 
   refs.board.addEventListener("drop", async (event) => {
     const { source, target, setAction } = event.detail;
+    if (state.pendingMove) {
+      logMessage("Wait for the previous move to send.");
+      setAction("snapback");
+      return;
+    }
     const moves = state.chess.moves({ verbose: true }).filter((m) => m.from === source && m.to === target);
     if (!moves.length) {
       setAction("snapback");
@@ -403,9 +536,15 @@ if (refs.board) {
     const move = moves[0];
     const uci = move.from + move.to + (move.promotion || "");
     try {
-      await submitMove(uci);
-      setAction("snapback"); // wait for stream to confirm and apply
+      const applied = applyOptimisticMove(uci);
+      if (!applied) {
+        setAction("snapback");
+        return;
+      }
+      await submitMove(uci, true);
+      setAction("move");
     } catch {
+      revertPendingMove();
       setAction("snapback");
     }
   });
@@ -427,6 +566,7 @@ if (refs.queueForm) {
     state.playerId = player_id;
     state.initialMs = initial_ms || state.initialMs;
     setStatus("Joining queue...");
+    showBoardOverlay("Matching…");
     try {
       const data = await joinQueue({
         player_id,
@@ -443,6 +583,7 @@ if (refs.queueForm) {
       }
     } catch (error) {
       setStatus(error.message || "Failed to join queue.");
+      hideBoardOverlay();
     }
   });
 }
@@ -464,6 +605,7 @@ if (refs.leaveBtn) {
       state.chess.reset();
       resetMoveList();
       renderBoard();
+      hideBoardOverlay();
     } catch {
       setStatus("Unable to leave queue.");
     }

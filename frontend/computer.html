@@ -20,6 +20,7 @@
         <a href="./online.html">Online (WIP)</a>
         <a href="./computer.html" class="active">Vs Computer</a>
         <a href="./replay.html">Replay</a>
+        <a href="./auth.html">Accounts (WIP)</a>
       </div>
     </nav>
     <div class="app">
@@ -75,8 +76,33 @@
             <h2>Live Board</h2>
             <span>orientation auto-adjusts</span>
           </div>
-          <div class="board-shell">
-            <chess-board id="board" draggable-pieces coordinates></chess-board>
+          <div class="board-shell theme-night" id="boardShell">
+            <chess-board id="board" class="animate-pieces pieces-classic" draggable-pieces coordinates></chess-board>
+            <div class="move-highlight" id="computerMoveHighlight"></div>
+          </div>
+          <div class="board-style-controls">
+            <div class="style-group">
+              <label for="boardThemeSelect">Board style</label>
+              <select id="boardThemeSelect">
+                <option value="night" selected>Night Slate</option>
+                <option value="classic">Classic Brown</option>
+                <option value="forest">Forest</option>
+                <option value="sand">Sandstone</option>
+              </select>
+            </div>
+            <div class="style-group">
+              <label for="pieceStyleSelect">Pieces</label>
+              <select id="pieceStyleSelect">
+                <option value="classic" selected>Classic</option>
+                <option value="mono">Monochrome</option>
+                <option value="neon">Neon</option>
+              </select>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="animatePiecesToggle" checked />
+              <span class="toggle-shape"></span>
+              <span>Animate moves</span>
+            </label>
           </div>
           <div class="share-card">
             <div class="share-header">

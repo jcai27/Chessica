@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 class TimeControl(BaseModel):
@@ -240,3 +240,27 @@ class EngineEventResponse(BaseModel):
     session_id: str
     events: list[EngineEvent]
     summary: EngineEventSummary
+
+
+class AuthFeatureResponse(BaseModel):
+    enabled: bool
+
+
+class SendCodeRequest(BaseModel):
+    email: EmailStr
+
+
+class AuthSignInRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class AuthSignUpRequest(BaseModel):
+    email: EmailStr
+    password: str
+    remember: bool = False
+
+
+class AuthTokenResponse(BaseModel):
+    token: str
+    user: UserResponse
