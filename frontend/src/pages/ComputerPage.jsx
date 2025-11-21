@@ -267,57 +267,7 @@ function ComputerPage() {
 
   return (
     <div className="app">
-      <header className="hero">
-        <div className="hero-title">
-          <div className="badge">
-            <span>♟︎</span>
-          </div>
-          <div>
-            <h1>Chessica Control Room</h1>
-            <p>Exploit-aware sessions with offline-ready assets, coach summaries, and difficulty presets.</p>
-          </div>
-        </div>
-        <span className="pill">{session ? "Active" : "Setup"}</span>
-      </header>
-
-      <section className="card controls">
-        <form className="controls-form" onSubmit={handleStart}>
-          <label className="select-field">
-            <span>Color</span>
-            <select value={colorChoice} onChange={(e) => setColorChoice(e.target.value)}>
-              <option value="auto">Auto</option>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-            </select>
-          </label>
-          <label className="select-field">
-            <span>Exploit Mode</span>
-            <select value={exploitMode} onChange={(e) => setExploitMode(e.target.value)}>
-              <option value="auto">Auto</option>
-              <option value="on">On</option>
-              <option value="off">Off</option>
-            </select>
-          </label>
-          <label className="select-field">
-            <span>Difficulty</span>
-            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-              {DIFFICULTY_PRESETS.map((preset) => (
-                <option key={preset.key} value={preset.key}>
-                  {preset.name} (~{preset.rating})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="difficulty-indicator">
-            <span>{describePreset(difficulty)}</span>
-          </div>
-          <button type="submit" disabled={pending}>
-            {pending ? "Starting..." : session ? "Restart Session" : "Start Session"}
-          </button>
-        </form>
-      </section>
-
-      <main className="page-grid">
+      <div className="page-grid">
         <section className="card board-card">
           <div className="card-header">
             <div>
@@ -369,7 +319,57 @@ function ComputerPage() {
           </div>
         </section>
 
-        <div className="insight-stack">
+        <div className="side-stack">
+          <header className="card hero hero-card">
+            <div className="hero-title">
+              <div className="badge">
+                <span>♟︎</span>
+              </div>
+              <div>
+                <h1>Chessica Control Room</h1>
+                <p>Exploit-aware sessions with offline-ready assets, coach summaries, and difficulty presets.</p>
+              </div>
+            </div>
+            <span className="pill">{session ? "Active" : "Setup"}</span>
+          </header>
+
+          <section className="card controls">
+            <form className="controls-form" onSubmit={handleStart}>
+              <label className="select-field">
+                <span>Color</span>
+                <select value={colorChoice} onChange={(e) => setColorChoice(e.target.value)}>
+                  <option value="auto">Auto</option>
+                  <option value="white">White</option>
+                  <option value="black">Black</option>
+                </select>
+              </label>
+              <label className="select-field">
+                <span>Exploit Mode</span>
+                <select value={exploitMode} onChange={(e) => setExploitMode(e.target.value)}>
+                  <option value="auto">Auto</option>
+                  <option value="on">On</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+              <label className="select-field">
+                <span>Difficulty</span>
+                <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+                  {DIFFICULTY_PRESETS.map((preset) => (
+                    <option key={preset.key} value={preset.key}>
+                      {preset.name} (~{preset.rating})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="difficulty-indicator">
+                <span>{describePreset(difficulty)}</span>
+              </div>
+              <button type="submit" disabled={pending}>
+                {pending ? "Starting..." : session ? "Restart Session" : "Start Session"}
+              </button>
+            </form>
+          </section>
+
           <section className="card insight-card">
             <div className="card-header">
               <div>
@@ -443,7 +443,7 @@ function ComputerPage() {
             </div>
           </section>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

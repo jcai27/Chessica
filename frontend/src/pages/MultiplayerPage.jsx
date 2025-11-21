@@ -212,68 +212,7 @@ function MultiplayerPage() {
 
   return (
     <div className="app">
-      <header className="hero">
-        <div className="hero-title">
-          <div className="badge">
-            <span>⚡</span>
-          </div>
-          <div>
-            <h1>Online Play</h1>
-            <p>Queue for opponents, stream moves, and keep clocks in sync.</p>
-          </div>
-        </div>
-        <span className="pill">Multiplayer</span>
-      </header>
-
-      <section className="card controls">
-        <form className="controls-form" onSubmit={handleQueue}>
-          <label className="select-field">
-            <span>Player ID</span>
-            <input
-              type="text"
-              value={form.player_id}
-              required
-              onChange={(e) => setForm((prev) => ({ ...prev, player_id: e.target.value }))}
-              placeholder="your-handle"
-            />
-          </label>
-          <label className="select-field">
-            <span>Color</span>
-            <select value={form.color} onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}>
-              <option value="auto">Auto</option>
-              <option value="white">White</option>
-              <option value="black">Black</option>
-            </select>
-          </label>
-          <label className="select-field">
-            <span>Initial (ms)</span>
-            <input
-              type="number"
-              value={form.initial_ms}
-              onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
-              min="60000"
-              step="60000"
-            />
-          </label>
-          <label className="select-field">
-            <span>Increment (ms)</span>
-            <input
-              type="number"
-              value={form.increment_ms}
-              onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
-              min="0"
-              step="1000"
-            />
-          </label>
-          <button type="submit">Join Queue</button>
-          <button type="button" className="secondary" onClick={leaveQueue}>
-            Leave Queue
-          </button>
-        </form>
-        <div className="difficulty-indicator">{queueStatus}</div>
-      </section>
-
-      <main className="page-grid">
+      <div className="page-grid">
         <section className="card board-card">
           <div className="card-header">
             <div>
@@ -320,25 +259,88 @@ function MultiplayerPage() {
           </div>
         </section>
 
-        <section className="card insight-card">
-          <div className="card-header">
-            <div>
-              <h2>Move Log</h2>
-              <span className="muted">Both players</span>
+        <div className="side-stack">
+          <header className="card hero hero-card">
+            <div className="hero-title">
+              <div className="badge">
+                <span>⚡</span>
+              </div>
+              <div>
+                <h1>Online Play</h1>
+                <p>Queue for opponents, stream moves, and keep clocks in sync.</p>
+              </div>
             </div>
-          </div>
-          <ol className="analysis-list">
-            {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
-            {movePairs.map((pair) => (
-              <li key={pair.number} className="analysis-item">
-                <strong>
-                  {pair.number}. {pair.white || "..."} {pair.black || "..."}
-                </strong>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </main>
+            <span className="pill">Multiplayer</span>
+          </header>
+
+          <section className="card controls">
+            <form className="controls-form" onSubmit={handleQueue}>
+              <label className="select-field">
+                <span>Player ID</span>
+                <input
+                  type="text"
+                  value={form.player_id}
+                  required
+                  onChange={(e) => setForm((prev) => ({ ...prev, player_id: e.target.value }))}
+                  placeholder="your-handle"
+                />
+              </label>
+              <label className="select-field">
+                <span>Color</span>
+                <select value={form.color} onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}>
+                  <option value="auto">Auto</option>
+                  <option value="white">White</option>
+                  <option value="black">Black</option>
+                </select>
+              </label>
+              <label className="select-field">
+                <span>Initial (ms)</span>
+                <input
+                  type="number"
+                  value={form.initial_ms}
+                  onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
+                  min="60000"
+                  step="60000"
+                />
+              </label>
+              <label className="select-field">
+                <span>Increment (ms)</span>
+                <input
+                  type="number"
+                  value={form.increment_ms}
+                  onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
+                  min="0"
+                  step="1000"
+                />
+              </label>
+              <button type="submit">Join Queue</button>
+              <button type="button" className="secondary" onClick={leaveQueue}>
+                Leave Queue
+              </button>
+            </form>
+            <div className="difficulty-indicator">{queueStatus}</div>
+          </section>
+
+          <section className="card insight-card">
+            <div className="card-header">
+              <div>
+                <h2>Move Log</h2>
+                <span className="muted">Both players</span>
+              </div>
+            </div>
+            <ol className="analysis-list">
+              {movePairs.length === 0 && <li className="muted">No moves yet.</li>}
+              {movePairs.map((pair) => (
+                <li key={pair.number} className="analysis-item">
+                  <strong>
+                    {pair.number}. {pair.white || "..."} {pair.black || "..."}
+                  </strong>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
