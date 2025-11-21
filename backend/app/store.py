@@ -37,6 +37,48 @@ DIFFICULTY_PRESETS = [
 ]
 DIFFICULTY_MAP = {preset["name"]: preset for preset in DIFFICULTY_PRESETS}
 DEPTH_TO_PRESET = {preset["depth"]: preset for preset in DIFFICULTY_PRESETS}
+DEFAULT_RATING = 1500
+K_FACTOR = 32
+_rating_book: dict[str, int] = {}
+
+
+def _get_rating(player_id: str | None) -> int:
+    if not player_id:
+        return DEFAULT_RATING
+    return _rating_book.get(player_id, DEFAULT_RATING)
+
+
+def _set_rating(player_id: str | None, rating: int) -> None:
+    if not player_id:
+        return
+    _rating_book[player_id] = rating
+
+
+def _expected_score(rating_a: int, rating_b: int) -> float:
+    return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
+
+
+def apply_rating_result(player_id: str | None, opponent_rating: int, score: float) -> tuple[int, int]:
+    current = _get_rating(player_id)
+    expected = _expected_score(current, opponent_rating)
+    new_rating = round(current + K_FACTOR * (score - expected))
+    delta = new_rating - current
+    _set_rating(player_id, new_rating)
+    return new_rating, delta
+
+
+def apply_head_to_head(player_a: str | None, player_b: str | None, score_a: float) -> tuple[tuple[int, int], tuple[int, int]]:
+    rating_a = _get_rating(player_a)
+    rating_b = _get_rating(player_b)
+    expected_a = _expected_score(rating_a, rating_b)
+    expected_b = 1 - expected_a
+    new_a = round(rating_a + K_FACTOR * (score_a - expected_a))
+    new_b = round(rating_b + K_FACTOR * ((1 - score_a) - expected_b))
+    delta_a = new_a - rating_a
+    delta_b = new_b - rating_b
+    _set_rating(player_a, new_a)
+    _set_rating(player_b, new_b)
+    return (new_a, delta_a), (new_b, delta_b)
 
 
 def depth_to_rating(depth: int) -> int:
@@ -98,6 +140,9 @@ class SessionRecord:
         default_factory=lambda: DEPTH_TO_PRESET.get(settings.engine_default_depth, DIFFICULTY_PRESETS[2])["name"]
     )
     last_eval_cp: int = 0
+    player_id: str | None = None
+    player_rating: int = 1500
+    player_rating_delta: int = 0
 
     def to_response(self) -> SessionResponse:
         return SessionResponse(
@@ -107,6 +152,8 @@ class SessionRecord:
             exploit_mode=self.exploit_mode,
             engine_depth=self.engine_depth,
             engine_rating=self.engine_rating,
+            player_rating=self.player_rating,
+            player_rating_delta=self.player_rating_delta,
             difficulty=self.difficulty,
             status=self.status,
             created_at=self.created_at,
@@ -130,6 +177,8 @@ class SessionRecord:
             is_multiplayer=self.is_multiplayer,
             player_white_id=self.player_white_id,
             player_black_id=self.player_black_id,
+            player_rating=self.player_rating,
+            player_rating_delta=self.player_rating_delta,
         )
 
     def to_multiplayer_response(self) -> MultiplayerSessionResponse:
@@ -167,6 +216,9 @@ class SessionRecord:
             "player_white_id": self.player_white_id,
             "player_black_id": self.player_black_id,
             "is_multiplayer": self.is_multiplayer,
+            "player_id": self.player_id,
+            "player_rating": self.player_rating,
+            "player_rating_delta": self.player_rating_delta,
         }
 
     @classmethod
@@ -193,6 +245,9 @@ class SessionRecord:
             is_multiplayer=payload.get("is_multiplayer", False),
             result=payload.get("result"),
             winner=payload.get("winner"),
+            player_id=payload.get("player_id"),
+            player_rating=payload.get("player_rating", 1500),
+            player_rating_delta=payload.get("player_rating_delta", 0),
         )
 
     @classmethod
@@ -225,6 +280,9 @@ class SessionRecord:
             is_multiplayer=bool(model.is_multiplayer),
             result=model.result,
             winner=model.winner,
+            player_id=getattr(model, "player_id", None),
+            player_rating=getattr(model, "player_rating", 1500),
+            player_rating_delta=getattr(model, "player_rating_delta", 0),
         )
 
     @property
@@ -280,6 +338,9 @@ class SessionRepository:
                 exploit_mode=record.exploit_mode,
                 difficulty=record.difficulty,
                 engine_rating=record.engine_rating,
+                player_rating=record.player_rating,
+                player_rating_delta=record.player_rating_delta,
+                player_id=record.player_id,
                 status=record.status,
                 fen=record.fen,
                 initial_fen=record.initial_fen,
@@ -341,6 +402,9 @@ class SessionRepository:
                 exploit_mode=record.exploit_mode,
                 difficulty=record.difficulty,
                 engine_rating=record.engine_rating,
+                player_rating=record.player_rating,
+                player_rating_delta=record.player_rating_delta,
+                player_id=record.player_id,
                 status=record.status,
                 fen=record.fen,
                 initial_fen=record.initial_fen,
@@ -354,6 +418,9 @@ class SessionRepository:
                 player_white_id=record.player_white_id,
                 player_black_id=record.player_black_id,
                 is_multiplayer=True,
+                player_rating=record.player_rating,
+                player_rating_delta=record.player_rating_delta,
+                player_id=record.player_id,
             )
             db.add(db_model)
             db.commit()
@@ -392,6 +459,9 @@ class SessionRepository:
             model.is_multiplayer = record.is_multiplayer
             model.result = record.result
             model.winner = record.winner
+            model.player_id = record.player_id
+            model.player_rating = record.player_rating
+            model.player_rating_delta = record.player_rating_delta
             model.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(model)
@@ -411,6 +481,37 @@ class SessionRepository:
             record = SessionRecord.from_model(model)
         self.cache.set(session_id, record.to_cache())
         return record
+
+    def apply_engine_rating(self, record: SessionRecord, winner: str | None) -> SessionRecord:
+        score = 0.5 if winner == "draw" or winner is None else (1.0 if winner == "player" else 0.0)
+        new_rating, delta = apply_rating_result(record.player_id or "guest", record.engine_rating, score)
+        record.player_rating = new_rating
+        record.player_rating_delta = delta
+        return self.save(record)
+
+    def apply_multiplayer_ratings(self, record: SessionRecord, winner_color: str | None) -> tuple[SessionRecord, dict]:
+        if not record.player_white_id or not record.player_black_id:
+            return record, {}
+        if winner_color == "white":
+            score_white = 1.0
+        elif winner_color == "black":
+            score_white = 0.0
+        else:
+            score_white = 0.5
+        (white_rating, white_delta), (black_rating, black_delta) = apply_head_to_head(
+            record.player_white_id, record.player_black_id, score_white
+        )
+        rating_map = {
+            "white": {"rating": white_rating, "delta": white_delta},
+            "black": {"rating": black_rating, "delta": black_delta},
+        }
+        record.player_rating = white_rating if record.player_color == "white" else black_rating
+        record.player_rating_delta = white_delta if record.player_color == "white" else black_delta
+        record = self.save(record)
+        return record, rating_map
+
+    def get_player_rating(self, player_id: str | None) -> int:
+        return _get_rating(player_id or "guest")
 
     @staticmethod
     def _resolve_colors(requested: str) -> tuple[str, str]:

@@ -164,7 +164,14 @@ function MultiplayerPage() {
     if (turn !== playerColor) return false;
     const promotionRank = piece.startsWith("w") ? "8" : "1";
     const wantsPromotion = targetSquare.endsWith(promotionRank) && piece.toLowerCase().startsWith("p");
-    const promotion = wantsPromotion ? "q" : undefined;
+    const promotion = wantsPromotion
+      ? (() => {
+          const choice = window.prompt("Promote to (q, r, b, n):", "q")?.toLowerCase();
+          if (!choice || !["q", "r", "b", "n"].includes(choice)) return null;
+          return choice;
+        })()
+      : undefined;
+    if (wantsPromotion && !promotion) return false;
     const move = chessRef.current.move({ from: sourceSquare, to: targetSquare, promotion });
     if (!move) return false;
     const uci = `${sourceSquare}${targetSquare}${promotion || ""}`;

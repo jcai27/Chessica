@@ -285,7 +285,11 @@ async def play_move(
         record.result = result
         record.winner = winner
 
-    record = store.save(record)
+    rating_map: dict[str, dict] = {}
+    if result:
+        record, rating_map = store.apply_multiplayer_ratings(record, winner)
+    else:
+        record = store.save(record)
     game_state = GameState(
         fen=record.fen,
         move_number=board.fullmove,
@@ -313,6 +317,7 @@ async def play_move(
         "message": message,
         "player": payload.player_id,
         "clocks": record.clocks.model_dump(),
+        "ratings": rating_map,
     }
     await stream_manager.broadcast(session_id, {"type": "player_move", "payload": event_payload})
     log_event(session_id, "player_move", event_payload)
@@ -333,7 +338,7 @@ async def resign(
     record.status = "completed"
     record.result = "resigned"
     record.winner = "white" if record.player_color == "black" else "black"
-    record = store.save(record)
+    record, rating_map = store.apply_multiplayer_ratings(record, record.winner)
     game_state = GameState(
         fen=record.fen,
         move_number=Board.from_fen(record.fen).fullmove,
@@ -344,6 +349,7 @@ async def resign(
         "winner": record.winner,
         "message": "Player resigned.",
         "game_state": game_state.model_dump(),
+        "ratings": rating_map,
     }
     await stream_manager.broadcast(session_id, {"type": "game_over", "payload": payload})
     log_event(session_id, "game_over", payload)
@@ -369,7 +375,7 @@ async def offer_draw(session_id: str = Path(..., description="Session identifier
     record.status = "completed"
     record.result = "draw"
     record.winner = "draw"
-    record = store.save(record)
+    record, rating_map = store.apply_multiplayer_ratings(record, record.winner)
     game_state = GameState(
         fen=record.fen,
         move_number=Board.from_fen(record.fen).fullmove,
@@ -380,6 +386,7 @@ async def offer_draw(session_id: str = Path(..., description="Session identifier
         "winner": record.winner,
         "message": "Game drawn by agreement.",
         "game_state": game_state.model_dump(),
+        "ratings": rating_map,
     }
     await stream_manager.broadcast(session_id, {"type": "game_over", "payload": payload})
     log_event(session_id, "game_over", payload)

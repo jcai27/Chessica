@@ -37,6 +37,9 @@ class SessionModel(Base):
     opponent_profile = Column(JSON, nullable=False)
     player_white_id = Column(String, nullable=True)
     player_black_id = Column(String, nullable=True)
+    player_id = Column(String, nullable=True)
+    player_rating = Column(Integer, default=1500, nullable=False)
+    player_rating_delta = Column(Integer, default=0, nullable=False)
     is_multiplayer = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -57,6 +60,9 @@ class SessionModel(Base):
             "clock_engine_ms": self.clock_engine_ms,
             "moves": list(self.moves or []),
             "opponent_profile": self.opponent_profile,
+            "player_id": self.player_id,
+            "player_rating": self.player_rating,
+            "player_rating_delta": self.player_rating_delta,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

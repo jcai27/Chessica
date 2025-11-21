@@ -221,12 +221,19 @@ function ComputerPage() {
     }
   };
 
+  const pickPromotion = () => {
+    const choice = window.prompt("Promote to (q, r, b, n):", "q")?.toLowerCase();
+    if (!choice) return null;
+    return ["q", "r", "b", "n"].includes(choice) ? choice : null;
+  };
+
   const handleDrop = async (sourceSquare, targetSquare, piece) => {
     if (!session?.session_id) return false;
     if (pending) return false;
     const promotionRank = piece.startsWith("w") ? "8" : "1";
     const wantsPromotion = targetSquare.endsWith(promotionRank) && piece.toLowerCase().startsWith("p");
-    const promotion = wantsPromotion ? "q" : undefined;
+    let promotion = wantsPromotion ? pickPromotion() || undefined : undefined;
+    if (wantsPromotion && !promotion) return false;
     const move = chessRef.current.move({ from: sourceSquare, to: targetSquare, promotion });
     if (!move) return false;
     const uci = `${sourceSquare}${targetSquare}${promotion || ""}`;

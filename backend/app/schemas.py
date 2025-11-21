@@ -34,6 +34,8 @@ class SessionResponse(BaseModel):
     engine_depth: int
     difficulty: DifficultyLevel
     engine_rating: int
+    player_rating: int | None = None
+    player_rating_delta: int = 0
     status: Literal["active", "completed", "abandoned"]
     created_at: datetime
     updated_at: datetime
@@ -99,6 +101,8 @@ class MoveResponse(BaseModel):
     winner: Literal["player", "engine", "draw"] | None = None
     latest_insight: MoveInsight | None = None
     message: str | None = None
+    player_rating: int | None = None
+    player_rating_delta: int | None = None
 
 
 class CoachSummaryResponse(BaseModel):

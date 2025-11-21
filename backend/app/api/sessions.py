@@ -172,6 +172,10 @@ async def make_move(
         record = store.get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found") from None
+    if not record.player_id and payload.player_id:
+        record.player_id = payload.player_id
+    if record.player_id:
+        record.player_rating = store.get_player_rating(record.player_id)
 
     board = Board.from_fen(record.fen)
     clocks = ClockState.model_validate(payload.clock.model_dump())
@@ -217,8 +221,8 @@ async def make_move(
             record.status = "completed"
             record.fen = board.to_fen()
             record.clocks = clocks
-            record = store.save(record)
             result, winner, message = _determine_outcome(board, record.player_color)
+            record = store.apply_engine_rating(record, winner)
             explanation = Explanation(
                 summary=message,
                 objective_cost_cp=0,
@@ -236,6 +240,8 @@ async def make_move(
                 result=result,
                 winner=winner,
                 message=message,
+                player_rating=record.player_rating,
+                player_rating_delta=record.player_rating_delta,
             )
             await _broadcast_game_over(
                 session_id,
@@ -247,6 +253,8 @@ async def make_move(
                     "difficulty": record.difficulty,
                     "engine_depth": record.engine_depth,
                     "engine_rating": record.engine_rating,
+                    "player_rating": record.player_rating,
+                    "player_rating_delta": record.player_rating_delta,
                 },
             )
             return response
@@ -324,15 +332,19 @@ async def make_move(
         explanation=explanation,
         game_state=game_state,
         latest_insight=MoveInsight.model_validate(player_insight_dict) if player_insight_dict else None,
+        player_rating=record.player_rating,
+        player_rating_delta=record.player_rating_delta,
     )
 
     if board.raw.is_checkmate() or board.raw.is_stalemate():
         record.status = "completed"
-        record = store.save(record)
         result, winner, message = _determine_outcome(board, record.player_color)
         response.result = result
         response.winner = winner
         response.message = message
+        record = store.apply_engine_rating(record, winner)
+        response.player_rating = record.player_rating
+        response.player_rating_delta = record.player_rating_delta
         await _broadcast_game_over(
             session_id,
             {
@@ -343,6 +355,8 @@ async def make_move(
                 "difficulty": record.difficulty,
                 "engine_depth": record.engine_depth,
                 "engine_rating": record.engine_rating,
+                "player_rating": record.player_rating,
+                "player_rating_delta": record.player_rating_delta,
             },
         )
 
