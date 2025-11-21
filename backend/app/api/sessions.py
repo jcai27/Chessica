@@ -25,10 +25,13 @@ from ..schemas import (
     SessionResponse,
     ReplayResponse,
     ReplayMove,
+    OpeningInfo,
 )
 from ..store import store, SessionRecord
 from ..realtime import stream_manager
 from ..telemetry import log_event
+from ..openings import detect_opening
+from ..streaming import stream_update
 import chess.pgn
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -118,7 +121,9 @@ def get_session(session_id: str = Path(..., description="Session identifier")) -
         record = store.get_session(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found") from None
-    return record.to_detail()
+    opening = detect_opening(record.moves)
+    opening_info = OpeningInfo(name=opening["name"], eco=opening["eco"], ply=len(opening["uci"])) if opening else None
+    return record.to_detail().copy(update={"opening": opening_info})
 
 
 @router.get("/{session_id}/pgn")
@@ -189,6 +194,11 @@ async def make_move(
         if board.active_color != player_turn:
             raise HTTPException(status_code=409, detail="It is not the player's turn.")
         legal_moves = board.legal_moves()
+        # Validate promotion character if present.
+        if len(payload.uci) > 4:
+            promo = payload.uci[4].lower()
+            if promo not in {"q", "r", "b", "n"}:
+                raise HTTPException(status_code=400, detail="Invalid promotion piece.")
         if payload.uci not in legal_moves:
             raise HTTPException(status_code=400, detail="Illegal move.")
         player_move_obj = chess.Move.from_uci(payload.uci)
@@ -230,6 +240,8 @@ async def make_move(
                 alt_eval_cp=0,
             )
             game_state = engine.make_game_state(board)
+            opening = detect_opening(record.moves)
+            opening_info = OpeningInfo(name=opening["name"], eco=opening["eco"], ply=len(opening["uci"])) if opening else None
             response = MoveResponse(
                 engine_move=None,
                 engine_eval_cp=0,
@@ -240,6 +252,7 @@ async def make_move(
                 result=result,
                 winner=winner,
                 message=message,
+                opening=opening_info,
                 player_rating=record.player_rating,
                 player_rating_delta=record.player_rating_delta,
             )
@@ -323,6 +336,8 @@ async def make_move(
 
     exploit_confidence = engine.mock_exploit_confidence()
     game_state = engine.make_game_state(board)
+    opening = detect_opening(record.moves)
+    opening_info = OpeningInfo(name=opening["name"], eco=opening["eco"], ply=len(opening["uci"])) if opening else None
 
     response = MoveResponse(
         engine_move=engine_move,
@@ -334,6 +349,7 @@ async def make_move(
         latest_insight=MoveInsight.model_validate(player_insight_dict) if player_insight_dict else None,
         player_rating=record.player_rating,
         player_rating_delta=record.player_rating_delta,
+        opening=opening_info,
     )
 
     if board.raw.is_checkmate() or board.raw.is_stalemate():
@@ -408,6 +424,10 @@ async def summarize_position(session_id: str = Path(..., description="Session id
     _enforce_coach_rate_limit(session_id)
     board = Board.from_fen(record.fen)
     eval_cp = engine.evaluate_position(board, record.difficulty, record.engine_rating)
+    opening = detect_opening(record.moves)
+    opening_info = OpeningInfo(name=opening["name"], eco=opening["eco"], ply=len(opening["uci"])) if opening else None
+    features = engine.extract_position_features(board.raw)
+    plans = engine.build_candidate_plans(board.raw, record.difficulty, record.engine_rating)
     player_feedback = None
     if record.move_log:
         player_feedback = record.move_log[-1].get("commentary")
@@ -424,7 +444,16 @@ async def summarize_position(session_id: str = Path(..., description="Session id
         log_event(session_id, "coach_summary_failed", {"error": str(exc)})
         raise HTTPException(status_code=502, detail="Coach summary unavailable.") from exc
     log_event(session_id, "coach_summary", {"length": len(summary or "")})
-    return CoachSummaryResponse(summary=summary)
+    response = CoachSummaryResponse(
+        summary=summary,
+        eval_cp=eval_cp,
+        position_features=features,
+        plans=plans,
+        opening=opening_info,
+        mode="ideas",
+    )
+    await stream_update(session_id, {"type": "coach_update", "payload": response.model_dump()})
+    return response
 
 
 def _enforce_coach_rate_limit(session_id: str) -> None:

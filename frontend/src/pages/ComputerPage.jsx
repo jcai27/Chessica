@@ -29,6 +29,7 @@ function ComputerPage() {
   const [movePairs, setMovePairs] = useState([]);
   const [coachSummary, setCoachSummary] = useState("");
   const [coachLoading, setCoachLoading] = useState(false);
+  const [coachData, setCoachData] = useState(null);
   const [activeTab, setActiveTab] = useState("controls");
   const [colorChoice, setColorChoice] = useState("auto");
   const [exploitMode, setExploitMode] = useState("auto");
@@ -38,7 +39,11 @@ function ComputerPage() {
   const [latestEval, setLatestEval] = useState(null);
   const [message, setMessage] = useState("");
   const [gameBanner, setGameBanner] = useState(null);
+  const [pendingPromotion, setPendingPromotion] = useState(null);
   const coachLines = useMemo(() => parseCoachSummary(coachSummary), [coachSummary]);
+  const coachPlans = coachData?.plans || [];
+  const coachFeatures = coachData?.position_features;
+  const coachOpening = coachData?.opening;
 
   useEffect(() => {
     return () => {
@@ -82,6 +87,13 @@ function ComputerPage() {
           setFen(chessRef.current.fen());
           setStatusText(data.payload.message || "Game over.");
           setMessage(data.payload.message || "");
+        }
+        if (data.type === "coach_update") {
+          setCoachSummary(data.payload.summary || "");
+          setCoachData(data.payload);
+          if (typeof data.payload.eval_cp === "number") {
+            setLatestEval(data.payload.eval_cp);
+          }
         }
       } catch {
         // ignore noisy frames
@@ -213,9 +225,11 @@ function ComputerPage() {
     if (!session?.session_id) return;
     setCoachLoading(true);
     setCoachSummary("");
+    setCoachData(null);
     try {
       const data = await api.coach(session.session_id);
       setCoachSummary(data.summary || "");
+      setCoachData(data);
     } catch (err) {
       setCoachSummary(err.message || "Coach summary unavailable.");
     } finally {
@@ -232,9 +246,34 @@ function ComputerPage() {
     if (!promoMoves.length) return candidates[0];
     if (promoMoves.length === 1) return promoMoves[0];
     const options = promoMoves.map((m) => m.promotion).filter(Boolean);
-    const choice = window.prompt(`Promote to (${options.join(", ")}):`, "q")?.toLowerCase();
-    const selected = promoMoves.find((m) => m.promotion === choice);
-    return selected || promoMoves[0];
+    setPendingPromotion({ sourceSquare, targetSquare, options, promoMoves });
+    return null;
+  };
+
+  const applyPromotionChoice = async (promo) => {
+    if (!pendingPromotion) return;
+    const { sourceSquare, targetSquare, promoMoves } = pendingPromotion;
+    const selected = promoMoves.find((m) => m.promotion === promo) || promoMoves[0];
+    setPendingPromotion(null);
+    const move = chessRef.current.move(selected);
+    if (!move) return false;
+    const uci = `${sourceSquare}${targetSquare}${move.promotion || ""}`;
+    setFen(chessRef.current.fen());
+    applyNotation(uci);
+    try {
+      await submitMove(uci);
+      return true;
+    } catch (err) {
+      chessRef.current.undo();
+      notationRef.current.undo();
+      setFen(chessRef.current.fen());
+      setMessage(err.message);
+      return false;
+    }
+  };
+
+  const cancelPromotionChoice = () => {
+    setPendingPromotion(null);
   };
 
   const handleDrop = async (sourceSquare, targetSquare, piece) => {
@@ -285,7 +324,9 @@ function ComputerPage() {
       setStatusText(response.message || `Game over (${response.result})`);
       setGameBanner({
         title: response.winner === "player" ? "Victory" : response.winner === "engine" ? "Defeat" : "Draw",
-        message: response.message || response.result,
+        message:
+          response.message ||
+          `${response.result}${typeof response.player_rating_delta === "number" ? ` · Rating: ${response.player_rating_delta >= 0 ? "+" : ""}${response.player_rating_delta}` : ""}`,
       });
     }
   };
@@ -324,6 +365,21 @@ function ComputerPage() {
                 customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
               />
             </div>
+            {pendingPromotion && (
+              <div className="promotion-panel">
+                <span className="muted">Promote to:</span>
+                <div className="inline-actions compact">
+                  {pendingPromotion.options.map((opt) => (
+                    <button key={opt} type="button" onClick={() => applyPromotionChoice(opt)}>
+                      {opt.toUpperCase()}
+                    </button>
+                  ))}
+                  <button type="button" className="secondary" onClick={cancelPromotionChoice}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {gameBanner && (
               <div className="game-banner">
                 <strong>{gameBanner.title}</strong>
@@ -507,6 +563,64 @@ function ComputerPage() {
                       <p className="muted">No coach summary yet.</p>
                     )}
                   </div>
+                  {coachOpening && (
+                    <div className="summary-block">
+                      <strong>{coachOpening.name}</strong>
+                      <span className="muted">ECO {coachOpening.eco}</span>
+                    </div>
+                  )}
+                  {coachFeatures && (
+                    <div className="summary-block">
+                      <strong>Position Brief</strong>
+                      <div className="tag-row">
+                        {(coachFeatures.global_themes || []).map((theme) => (
+                          <span key={theme} className="tag">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="two-col">
+                        <div>
+                          <strong>White</strong>
+                          <ul className="coach-lines">
+                            <li>King: {coachFeatures.white?.king_safety}</li>
+                            <li>Pawns: {(coachFeatures.white?.pawn_structure || []).join(", ")}</li>
+                            <li>Activity: {coachFeatures.white?.piece_activity}</li>
+                            <li>Space: {typeof coachFeatures.white?.space === "object" ? "balanced" : coachFeatures.white?.space}</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <strong>Black</strong>
+                          <ul className="coach-lines">
+                            <li>King: {coachFeatures.black?.king_safety}</li>
+                            <li>Pawns: {(coachFeatures.black?.pawn_structure || []).join(", ")}</li>
+                            <li>Activity: {coachFeatures.black?.piece_activity}</li>
+                            <li>Space: {typeof coachFeatures.black?.space === "object" ? "balanced" : coachFeatures.black?.space}</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {coachPlans.length > 0 && (
+                    <div className="stack">
+                      {coachPlans.map((plan, idx) => (
+                        <div key={`${plan.name}-${idx}`} className="summary-block">
+                          <strong>{plan.name}</strong>
+                          <p className="muted">{plan.idea}</p>
+                          <div className="tag-row">
+                            {(plan.example_moves || []).map((mv) => (
+                              <span key={mv} className="tag">
+                                {mv}
+                              </span>
+                            ))}
+                          </div>
+                          {plan.preconditions?.length > 0 && <p className="muted">Preconditions: {plan.preconditions.join(", ")}</p>}
+                          {plan.risk && <p className="muted">Risk: {plan.risk}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="hint">Live coach updates will stream here after each move.</div>
                 </div>
               )}
             </div>

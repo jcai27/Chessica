@@ -9,6 +9,7 @@ from uuid import uuid4
 import random
 
 import chess
+from sqlalchemy import text
 
 from .cache import session_cache
 from .database import SessionLocal
@@ -42,15 +43,56 @@ K_FACTOR = 32
 _rating_book: dict[str, int] = {}
 
 
+def _ensure_ratings_table() -> None:
+    with SessionLocal() as db:
+        try:
+            db.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS player_ratings (
+                        player_id TEXT PRIMARY KEY,
+                        rating INTEGER NOT NULL DEFAULT 1500,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
 def _get_rating(player_id: str | None) -> int:
     if not player_id:
         return DEFAULT_RATING
+    try:
+        with SessionLocal() as db:
+            row = db.execute(text("SELECT rating FROM player_ratings WHERE player_id=:pid"), {"pid": player_id}).fetchone()
+            if row and row[0] is not None:
+                return int(row[0])
+    except Exception:
+        pass
     return _rating_book.get(player_id, DEFAULT_RATING)
 
 
 def _set_rating(player_id: str | None, rating: int) -> None:
     if not player_id:
         return
+    try:
+        with SessionLocal() as db:
+            db.execute(
+                text(
+                    """
+                    INSERT INTO player_ratings (player_id, rating) VALUES (:pid, :r)
+                    ON CONFLICT(player_id) DO UPDATE SET rating=excluded.rating, updated_at=CURRENT_TIMESTAMP
+                    """
+                ),
+                {"pid": player_id, "r": rating},
+            )
+            db.commit()
+            return
+    except Exception:
+        pass
     _rating_book[player_id] = rating
 
 
@@ -303,6 +345,7 @@ def _normalize_moves(raw_moves: Any) -> List[Dict[str, Any]]:
 class SessionRepository:
     def __init__(self) -> None:
         self.cache = session_cache
+        _ensure_ratings_table()
 
     def create_session(self, payload: SessionCreateRequest) -> SessionRecord:
         session_id = f"sess_{uuid4().hex}"

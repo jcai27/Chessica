@@ -90,6 +90,12 @@ class GameState(BaseModel):
     turn: Literal["white", "black"]
 
 
+class OpeningInfo(BaseModel):
+    name: str
+    eco: str
+    ply: int
+
+
 class MoveResponse(BaseModel):
     engine_move: str | None = None
     engine_eval_cp: int
@@ -103,10 +109,16 @@ class MoveResponse(BaseModel):
     message: str | None = None
     player_rating: int | None = None
     player_rating_delta: int | None = None
+    opening: OpeningInfo | None = None
 
 
 class CoachSummaryResponse(BaseModel):
     summary: str
+    eval_cp: int | None = None
+    position_features: dict | None = None
+    plans: list[dict] | None = None
+    opening: OpeningInfo | None = None
+    mode: Literal["ideas", "lines"] = "ideas"
 
 
 class ReplayMove(BaseModel):
@@ -138,6 +150,7 @@ class SessionDetail(SessionResponse):
     is_multiplayer: bool = False
     player_white_id: Optional[str] = None
     player_black_id: Optional[str] = None
+    opening: OpeningInfo | None = None
 
 
 class AnalysisMove(BaseModel):
@@ -197,6 +210,8 @@ class MultiplayerMoveResponse(BaseModel):
     winner: Literal["white", "black", "draw"] | None = None
     message: str | None = None
     clocks: ClockState | None = None
+    opening: OpeningInfo | None = None
+    ratings: dict | None = None
 
 
 class QueueJoinRequest(BaseModel):

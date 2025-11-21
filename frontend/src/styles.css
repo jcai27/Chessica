@@ -377,6 +377,18 @@ body {
   align-items: flex-start;
 }
 
+.promotion-panel {
+  width: 100%;
+  max-width: 560px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.5rem 0.75rem;
+  display: grid;
+  gap: 0.35rem;
+  align-items: center;
+}
+
 .landing {
   height: 100%;
   display: grid;

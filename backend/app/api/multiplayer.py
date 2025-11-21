@@ -23,10 +23,12 @@ from ..schemas import (
     MultiplayerSessionResponse,
     QueueJoinRequest,
     QueueStatusResponse,
+    OpeningInfo,
 )
 from ..store import store
 from ..realtime import stream_manager
 from ..telemetry import log_event
+from ..openings import detect_opening
 
 router = APIRouter(prefix="/multiplayer", tags=["multiplayer"])
 matchmaking_queue: dict[str, dict] = {}
@@ -228,6 +230,12 @@ async def play_move(
     if expected_player and payload.player_id != expected_player:
         raise HTTPException(status_code=403, detail="It is not your turn.")
 
+    # Promotion validation
+    if len(payload.uci) > 4:
+        promo = payload.uci[4].lower()
+        if promo not in {"q", "r", "b", "n"}:
+            raise HTTPException(status_code=400, detail="Invalid promotion piece.")
+
     if payload.uci not in board.legal_moves():
         raise HTTPException(status_code=400, detail="Illegal move.")
 
@@ -288,6 +296,14 @@ async def play_move(
         record.result = result
         record.winner = winner
 
+    opening = None
+    try:
+        opening_match = detect_opening([m.get("uci", "") for m in record.move_log if m.get("uci")])
+        if opening_match:
+            opening = OpeningInfo(name=opening_match["name"], eco=opening_match["eco"], ply=len(opening_match["uci"]))
+    except Exception:
+        opening = None
+
     rating_map: dict[str, dict] = {}
     if result:
         record, rating_map = store.apply_multiplayer_ratings(record, winner)
@@ -308,6 +324,8 @@ async def play_move(
         winner=winner,
         message=message,
         clocks=record.clocks,
+        opening=opening,
+        ratings=rating_map or None,
     )
 
     event_payload = {
@@ -321,6 +339,7 @@ async def play_move(
         "player": payload.player_id,
         "clocks": record.clocks.model_dump(),
         "ratings": rating_map,
+        "opening": opening.model_dump() if opening else None,
     }
     await stream_manager.broadcast(session_id, {"type": "player_move", "payload": event_payload})
     log_event(session_id, "player_move", event_payload)

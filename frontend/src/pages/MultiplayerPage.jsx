@@ -34,6 +34,13 @@ function MultiplayerPage() {
   const [coachSummary, setCoachSummary] = useState("");
   const [coachLoading, setCoachLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("match");
+  const [pendingPromotion, setPendingPromotion] = useState(null);
+  const [coachData, setCoachData] = useState(null);
+  const [gameBanner, setGameBanner] = useState(null);
+  const [openingInfo, setOpeningInfo] = useState(null);
+  const coachOpening = coachData?.opening;
+  const coachFeatures = coachData?.position_features;
+  const coachPlans = coachData?.plans || [];
 
   useEffect(() => {
     return () => {
@@ -86,11 +93,29 @@ function MultiplayerPage() {
           setFen(game_state.fen);
           if (updatedClocks) updateClocks(updatedClocks);
           applyNotation(uci);
+          if (data.payload.opening) setOpeningInfo(data.payload.opening);
+        }
+        if (data.type === "coach_update") {
+          setCoachSummary(data.payload.summary || "");
+          setCoachData(data.payload);
         }
         if (data.type === "game_over" && data.payload?.game_state?.fen) {
           chessRef.current.load(data.payload.game_state.fen);
           setFen(data.payload.game_state.fen);
           setMessage(data.payload.message || "Game over.");
+          const winner = data.payload.winner;
+          const youAreWinner =
+            (winner === "white" && playerColor === "white") || (winner === "black" && playerColor === "black");
+          const title = winner === "draw" || winner === null ? "Draw" : youAreWinner ? "Victory" : "Defeat";
+          const ratingPayload = data.payload.ratings;
+          let delta = null;
+          if (ratingPayload && ratingPayload[playerColor] && typeof ratingPayload[playerColor].delta === "number") {
+            delta = ratingPayload[playerColor].delta;
+          }
+          const msg =
+            data.payload.message ||
+            (delta !== null ? `Rating: ${delta >= 0 ? "+" : ""}${delta}` : "Game over.");
+          setGameBanner({ title, message: msg });
         }
       } catch {
         // ignore malformed frames
@@ -180,8 +205,8 @@ function MultiplayerPage() {
         selected = promoMoves[0];
       } else {
         const options = promoMoves.map((m) => m.promotion).filter(Boolean);
-        const choice = window.prompt(`Promote to (${options.join(", ")}):`, "q")?.toLowerCase();
-        selected = promoMoves.find((m) => m.promotion === choice) || promoMoves[0];
+        setPendingPromotion({ sourceSquare, targetSquare, options, promoMoves });
+        return false;
       }
     }
     const move = chessRef.current.move(selected);
@@ -202,8 +227,21 @@ function MultiplayerPage() {
         setFen(res.game_state.fen);
       }
       updateClocks(res.clocks || clocks);
+      if (res.opening) setOpeningInfo(res.opening);
       if (res.result) {
         setMessage(res.message || "Game finished.");
+        const youAreWinner =
+          (res.winner === "white" && playerColor === "white") || (res.winner === "black" && playerColor === "black");
+        const title = res.winner === "draw" ? "Draw" : youAreWinner ? "Victory" : "Defeat";
+        const delta =
+          res.ratings && res.ratings[playerColor] && typeof res.ratings[playerColor].delta === "number"
+            ? res.ratings[playerColor].delta
+            : null;
+        const msg =
+          res.message ||
+          res.result ||
+          (delta !== null ? `Rating: ${delta >= 0 ? "+" : ""}${delta}` : "Game finished.");
+        setGameBanner({ title, message: msg });
       }
       return true;
     } catch (err) {
@@ -233,13 +271,50 @@ function MultiplayerPage() {
     if (!sessionId) return;
     setCoachLoading(true);
     setCoachSummary("");
+    setCoachData(null);
     try {
       const data = await api.coach(sessionId);
       setCoachSummary(data.summary || "");
+      setCoachData(data);
     } catch (err) {
       setCoachSummary(err.message || "Coach summary unavailable.");
     } finally {
       setCoachLoading(false);
+    }
+  };
+
+  const applyPromotionChoice = async (promo) => {
+    if (!pendingPromotion) return false;
+    const { sourceSquare, targetSquare, promoMoves } = pendingPromotion;
+    const selected = promoMoves.find((m) => m.promotion === promo) || promoMoves[0];
+    setPendingPromotion(null);
+    const move = chessRef.current.move(selected);
+    if (!move) return false;
+    const uci = `${sourceSquare}${targetSquare}${move.promotion || ""}`;
+    setFen(chessRef.current.fen());
+    applyNotation(uci);
+    try {
+      const res = await api.multiplayerMove(sessionId, {
+        uci,
+        player_id: form.player_id,
+        client_ts: new Date().toISOString(),
+        clock: clocks,
+      });
+      if (res.game_state?.fen) {
+        chessRef.current.load(res.game_state.fen);
+        setFen(res.game_state.fen);
+      }
+      updateClocks(res.clocks || clocks);
+      if (res.result) {
+        setMessage(res.message || "Game finished.");
+      }
+      return true;
+    } catch (err) {
+      chessRef.current.undo();
+      notationRef.current.undo();
+      setFen(chessRef.current.fen());
+      setMessage(err.message);
+      return false;
     }
   };
 
@@ -279,6 +354,11 @@ function MultiplayerPage() {
             <div className="clock-bar top-clock">
               <div className="player-meta">
                 <span className="muted">{playerColor === "white" ? "Opponent (Black)" : "Opponent (White)"}</span>
+                {openingInfo && (
+                  <span className="muted">
+                    {openingInfo.name} · ECO {openingInfo.eco}
+                  </span>
+                )}
               </div>
               <span className="pill">
                 {formatMs(playerColor === "white" ? liveClocks.engine_ms : liveClocks.player_ms)}
@@ -294,6 +374,27 @@ function MultiplayerPage() {
                 customBoardStyle={{ borderRadius: 12, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
               />
             </div>
+            {gameBanner && (
+              <div className="game-banner">
+                <strong>{gameBanner.title}</strong>
+                <span className="muted">{gameBanner.message}</span>
+              </div>
+            )}
+            {pendingPromotion && (
+              <div className="promotion-panel">
+                <span className="muted">Promote to:</span>
+                <div className="inline-actions compact">
+                  {pendingPromotion.options.map((opt) => (
+                    <button key={opt} type="button" onClick={() => applyPromotionChoice(opt)}>
+                      {opt.toUpperCase()}
+                    </button>
+                  ))}
+                  <button type="button" className="secondary" onClick={() => setPendingPromotion(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="clock-bar bottom-clock">
               <span className="pill">
                 {formatMs(playerColor === "white" ? liveClocks.player_ms : liveClocks.engine_ms)}
@@ -424,6 +525,64 @@ function MultiplayerPage() {
                   ) : (
                     <p className="muted">Request a coach summary after moves are played.</p>
                   )}
+                  {coachOpening && (
+                    <div className="summary-block">
+                      <strong>{coachOpening.name}</strong>
+                      <span className="muted">ECO {coachOpening.eco}</span>
+                    </div>
+                  )}
+                  {coachFeatures && (
+                    <div className="summary-block">
+                      <strong>Position Brief</strong>
+                      <div className="tag-row">
+                        {(coachFeatures.global_themes || []).map((theme) => (
+                          <span key={theme} className="tag">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="two-col">
+                        <div>
+                          <strong>White</strong>
+                          <ul className="coach-lines">
+                            <li>King: {coachFeatures.white?.king_safety}</li>
+                            <li>Pawns: {(coachFeatures.white?.pawn_structure || []).join(", ")}</li>
+                            <li>Activity: {coachFeatures.white?.piece_activity}</li>
+                            <li>Space: {typeof coachFeatures.white?.space === "object" ? "balanced" : coachFeatures.white?.space}</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <strong>Black</strong>
+                          <ul className="coach-lines">
+                            <li>King: {coachFeatures.black?.king_safety}</li>
+                            <li>Pawns: {(coachFeatures.black?.pawn_structure || []).join(", ")}</li>
+                            <li>Activity: {coachFeatures.black?.piece_activity}</li>
+                            <li>Space: {typeof coachFeatures.black?.space === "object" ? "balanced" : coachFeatures.black?.space}</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {coachPlans.length > 0 && (
+                    <div className="stack">
+                      {coachPlans.map((plan, idx) => (
+                        <div key={`${plan.name}-${idx}`} className="summary-block">
+                          <strong>{plan.name}</strong>
+                          <p className="muted">{plan.idea}</p>
+                          <div className="tag-row">
+                            {(plan.example_moves || []).map((mv) => (
+                              <span key={mv} className="tag">
+                                {mv}
+                              </span>
+                            ))}
+                          </div>
+                          {plan.preconditions?.length > 0 && <p className="muted">Preconditions: {plan.preconditions.join(", ")}</p>}
+                          {plan.risk && <p className="muted">Risk: {plan.risk}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="hint">Live coach updates will stream here after each move.</div>
                 </div>
               )}
             </div>

@@ -120,6 +120,232 @@ def make_game_state(board: Board) -> "GameState":
     )
 
 
+# ----- Position insight helpers -----
+def _material_phase(board: chess.Board) -> str:
+    values = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
+    total = sum(values.get(p.piece_type, 0) for p in board.piece_map().values())
+    if total <= 14:
+        return "endgame"
+    if total <= 22:
+        return "middlegame"
+    return "opening"
+
+
+def _material_diff(board: chess.Board) -> int:
+    values = {chess.PAWN: 100, chess.KNIGHT: 320, chess.BISHOP: 330, chess.ROOK: 500, chess.QUEEN: 900}
+    score = 0
+    for piece in board.piece_map().values():
+        val = values.get(piece.piece_type, 0)
+        score += val if piece.color == chess.WHITE else -val
+    return score
+
+
+def _pawn_structures(board: chess.Board, color: chess.Color) -> list[str]:
+    items: list[str] = []
+    pawns = list(board.pieces(chess.PAWN, color))
+    files = [chess.square_file(sq) for sq in pawns]
+    for f in set(files):
+        if files.count(f) > 1:
+            items.append("doubled pawns")
+        if f not in (0, 7) and all(ff not in files for ff in (f - 1, f + 1)):
+            items.append("isolated pawn")
+    for sq in pawns:
+        if _pawn_is_passed(board, sq, color):
+            items.append("passed pawn")
+    return list(dict.fromkeys(items))
+
+
+def _backward_pawns(board: chess.Board, color: chess.Color) -> list[chess.Square]:
+    backward: list[chess.Square] = []
+    for sq in board.pieces(chess.PAWN, color):
+        file_idx = chess.square_file(sq)
+        rank_idx = chess.square_rank(sq)
+        direction = 1 if color == chess.WHITE else -1
+        ahead = chess.square(file_idx, rank_idx + direction) if 0 <= rank_idx + direction < 8 else None
+        blockers = ahead and board.piece_at(ahead)
+        support = any(
+            board.piece_at(chess.square(adj, rank_idx)) and board.piece_at(chess.square(adj, rank_idx)).color == color and board.piece_at(chess.square(adj, rank_idx)).piece_type == chess.PAWN
+            for adj in (file_idx - 1, file_idx + 1)
+            if 0 <= adj < 8
+        )
+        if blockers and not support:
+            backward.append(sq)
+    return backward
+
+
+def _pawn_majority(board: chess.Board, color: chess.Color) -> str | None:
+    queenside = sum(1 for sq in board.pieces(chess.PAWN, color) if chess.square_file(sq) <= 3)
+    kingside = sum(1 for sq in board.pieces(chess.PAWN, color) if chess.square_file(sq) >= 4)
+    if queenside > kingside + 1:
+        return "queenside majority"
+    if kingside > queenside + 1:
+        return "kingside majority"
+    return None
+
+
+def _king_safety_label(board: chess.Board, color: chess.Color) -> str:
+    king_sq = board.king(color)
+    if king_sq is None:
+        return "king missing"
+    file_idx = chess.square_file(king_sq)
+    pawns_front = 0
+    ranks = range(chess.square_rank(king_sq) + 1, 8) if color == chess.WHITE else range(chess.square_rank(king_sq) - 1, -1, -1)
+    for r in ranks:
+        sq = chess.square(file_idx, r)
+        piece = board.piece_at(sq)
+        if piece and piece.piece_type == chess.PAWN and piece.color == color:
+            pawns_front += 1
+    open_files = sum(1 for f in (file_idx - 1, file_idx, file_idx + 1) if 0 <= f <= 7 and _file_is_open(board, chess.square(f, 0)))
+    if pawns_front >= 2 and open_files <= 1:
+        return "safe"
+    if pawns_front == 0 or open_files >= 2:
+        return "weak"
+    return "slightly drafty"
+
+
+def extract_position_features(board: chess.Board) -> dict[str, object]:
+    phase = _material_phase(board)
+    material_diff = _material_diff(board)
+    features = {"phase": phase, "material_diff_cp": material_diff, "global_themes": []}
+    features["imbalances"] = []
+    if len(board.pieces(chess.BISHOP, chess.WHITE)) >= 2 and len(board.pieces(chess.BISHOP, chess.BLACK)) < 2:
+        features["imbalances"].append("white bishop pair")
+    if len(board.pieces(chess.BISHOP, chess.BLACK)) >= 2 and len(board.pieces(chess.BISHOP, chess.WHITE)) < 2:
+        features["imbalances"].append("black bishop pair")
+
+    center_squares = {chess.D4, chess.E4, chess.D5, chess.E5}
+    extended_center = center_squares | {chess.C4, chess.F4, chess.C5, chess.F5}
+
+    for color, label in ((chess.WHITE, "white"), (chess.BLACK, "black")):
+        king_safety = _king_safety_label(board, color)
+        pawns = _pawn_structures(board, color)
+        backward = _backward_pawns(board, color)
+        majority = _pawn_majority(board, color)
+        pieces_developed = sum(
+            1
+            for sq, p in board.piece_map().items()
+            if p.color == color and p.piece_type in (chess.KNIGHT, chess.BISHOP) and chess.square_rank(sq) in (2, 3, 4, 5)
+        )
+        space = sum(
+            1
+            for sq, p in board.piece_map().items()
+            if p.color == color and ((chess.square_rank(sq) >= 4 and color == chess.WHITE) or (chess.square_rank(sq) <= 3 and color == chess.BLACK))
+        )
+        controls = chess.SquareSet()
+        for sq, p in board.piece_map().items():
+            if p.color == color:
+                controls |= board.attacks(sq)
+        center_control = len(controls & center_squares)
+        extended_control = len(controls & extended_center)
+        opp_half = len([sq for sq in controls if (chess.square_rank(sq) >= 4 and color == chess.BLACK) or (chess.square_rank(sq) <= 3 and color == chess.WHITE)])
+        king_zone = chess.SquareSet(chess.SQUARES) & chess.square_ring(board.king(color)) if board.king(color) else chess.SquareSet()
+        attackers = len([sq for sq in king_zone if board.is_attacked_by(not color, sq)])
+        open_files_to_king = sum(
+            1
+            for f in (chess.square_file(board.king(color)) - 1, chess.square_file(board.king(color)), chess.square_file(board.king(color)) + 1)
+            if 0 <= f < 8 and _file_is_open(board, chess.square(f, 0))
+        )
+        pawns_desc = pawns or ["solid"]
+        if backward:
+            pawns_desc.append("backward pawns")
+        if majority:
+            pawns_desc.append(majority)
+        features[label] = {
+            "king_safety": king_safety,
+            "king_zone_pressure": {"attackers": attackers, "open_files": open_files_to_king},
+            "pawn_structure": list(dict.fromkeys(pawns_desc)),
+            "piece_activity": "active" if pieces_developed >= 2 else "undeveloped",
+            "space": {
+                "center_control": center_control,
+                "extended_center": extended_control,
+                "opponent_half": opp_half,
+                "mobility": len(list(board.legal_moves)),
+            },
+        }
+    if "passed pawn" in features["white"]["pawn_structure"] and "passed pawn" not in features["black"]["pawn_structure"]:
+        features["global_themes"].append("White has a passed pawn")
+    if "passed pawn" in features["black"]["pawn_structure"] and "passed pawn" not in features["white"]["pawn_structure"]:
+        features["global_themes"].append("Black has a passed pawn")
+    if material_diff > 0:
+        features["global_themes"].append("White is up material")
+    elif material_diff < 0:
+        features["global_themes"].append("Black is up material")
+    return features
+
+
+def build_candidate_plans(board: chess.Board, difficulty: str, engine_rating: int, multipv: int = 3) -> list[dict]:
+    def _classify_plan(line: list[str], board_ref: chess.Board) -> dict[str, object]:
+        side = "white" if board_ref.turn == chess.WHITE else "black"
+        name = "Improve pieces"
+        idea = "Improve worst pieces and keep tension."
+        risk = "Watch opponent counterplay."
+        preconditions: list[str] = []
+        temp = board_ref.copy(stack=True)
+        first_san = line[0]
+        try:
+            move_obj = temp.parse_san(first_san)
+        except Exception:
+            move_obj = None
+        if move_obj:
+            mover = temp.piece_at(move_obj.from_square)
+            dest_file = chess.square_file(move_obj.to_square)
+            dest_rank = chess.square_rank(move_obj.to_square)
+            if mover and mover.piece_type == chess.PAWN:
+                name = "Pawn break"
+                idea = "Open lines and contest key squares with a pawn break."
+                risk = "Creates weaknesses if unsupported."
+                preconditions.append("Support the break with pieces.")
+            elif mover and mover.piece_type == chess.KNIGHT:
+                if (side == "white" and dest_rank >= 5) or (side == "black" and dest_rank <= 2):
+                    name = "Establish outpost"
+                    idea = "Plant the knight on a hard-to-challenge square to anchor pressure."
+                    risk = "Knight can be chased if pawn anchors are missing."
+                    preconditions.append("Square is protected by a pawn.")
+                else:
+                    name = "Reroute knight"
+                    idea = "Reroute the knight toward better outposts and key files."
+            elif mover and mover.piece_type == chess.BISHOP:
+                name = "Activate bishop"
+                idea = "Improve bishop scope and target weak squares/pawns."
+            elif mover and mover.piece_type == chess.ROOK:
+                existing_rook_files = [chess.square_file(sq) for sq, p in temp.piece_map().items() if p.color == mover.color and p.piece_type == chess.ROOK and sq != move_obj.from_square]
+                if dest_file in existing_rook_files:
+                    name = "Rook doubling"
+                    idea = "Double rooks to increase pressure on the file."
+                    preconditions.append("File is or will be opened.")
+                else:
+                    name = "Rook activation"
+                    idea = "Place rook on a file likely to open."
+            elif mover and mover.piece_type == chess.QUEEN:
+                king_sq = temp.king(not mover.color)
+                if king_sq and chess.square_distance(move_obj.to_square, king_sq) <= 3:
+                    name = "King attack setup"
+                    idea = "Aim the queen toward the enemy king to coordinate an attack."
+                    risk = "Queen can be harassed; ensure support."
+                else:
+                    name = "Centralize queen"
+                    idea = "Improve queen activity while keeping it safe."
+            if move_obj:
+                temp.push(move_obj)
+        return {
+            "side": side,
+            "name": name,
+            "idea": idea,
+            "example_moves": line,
+            "preconditions": preconditions,
+            "risk": risk,
+        }
+
+    plans: list[dict] = []
+    lines = analyze_position(board, difficulty, engine_rating, multipv=multipv, max_moves=3)
+    for entry in lines:
+        san_line = entry.get("san_line") or []
+        if not san_line:
+            continue
+        plans.append(_classify_plan(san_line, board))
+    return plans[:3]
+
+
 def mock_opponent_profile() -> "OpponentProfile":
     from random import random
 
