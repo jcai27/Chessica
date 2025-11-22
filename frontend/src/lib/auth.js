@@ -1,40 +1,15 @@
-const STORAGE_KEY = "chessica_auth";
+export function getAuthToken() {
+  return localStorage.getItem("chessica_token");
+}
 
-function safeParse(value) {
-  try {
-    return JSON.parse(value || "{}");
-  } catch {
-    return {};
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem("chessica_token", token);
+  } else {
+    localStorage.removeItem("chessica_token");
   }
 }
 
-export function loadAuth() {
-  if (typeof localStorage === "undefined") return null;
-  const data = safeParse(localStorage.getItem(STORAGE_KEY));
-  if (!data?.token || !data?.user) return null;
-  return data;
-}
-
-export function saveAuth(payload) {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      token: payload?.token,
-      user: payload?.user,
-    }),
-  );
-}
-
-export function clearAuth() {
-  if (typeof localStorage === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-export function getAuthToken() {
-  return loadAuth()?.token || null;
-}
-
-export function getAuthUser() {
-  return loadAuth()?.user || null;
+export function clearAuthToken() {
+  localStorage.removeItem("chessica_token");
 }

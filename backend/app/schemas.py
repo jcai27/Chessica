@@ -295,4 +295,9 @@ class AuthSignUpRequest(BaseModel):
 
 class AuthTokenResponse(BaseModel):
     token: str
+    refresh_token: Optional[str] = None
     user: UserResponse
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str

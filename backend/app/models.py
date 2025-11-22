@@ -92,3 +92,6 @@ class UserModel(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
+    verified = Column(Boolean, default=False, nullable=False)
+    verification_token = Column(String, nullable=True)
+    verification_expires_at = Column(DateTime(timezone=True), nullable=True)

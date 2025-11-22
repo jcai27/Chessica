@@ -17,6 +17,7 @@ from ..schemas import (
     AuthSignInRequest,
     AuthSignUpRequest,
     AuthTokenResponse,
+    RefreshRequest,
     SendCodeRequest,
     UserResponse,
 )
@@ -60,6 +61,12 @@ def create_token(user: UserModel) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
+def create_refresh_token(user: UserModel) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_days)
+    payload = {"sub": user.id, "email": user.email, "exp": exp, "type": "refresh"}
+    return jwt.encode(payload, settings.jwt_refresh_secret, algorithm="HS256")
+
+
 def get_current_user(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -77,6 +84,16 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+def _to_user_response(user: UserModel) -> UserResponse:
+    return UserResponse(
+        user_id=user.id,
+        username=user.username,
+        rating_hint=user.rating_hint,
+        exploit_default=user.exploit_default,
+        share_data_opt_in=user.share_data_opt_in,
+    )
 
 
 @router.post("/send-code")
@@ -99,15 +116,11 @@ def sign_in(payload: AuthSignInRequest, db: Session = Depends(get_db)) -> AuthTo
     db.commit()
     db.refresh(user)
     token = create_token(user)
+    refresh_token = create_refresh_token(user)
     return AuthTokenResponse(
         token=token,
-        user=UserResponse(
-            user_id=user.id,
-            username=user.username,
-            rating_hint=user.rating_hint,
-            exploit_default=user.exploit_default,
-            share_data_opt_in=user.share_data_opt_in,
-        ),
+        refresh_token=refresh_token,
+        user=_to_user_response(user),
     )
 
 
@@ -126,18 +139,35 @@ def sign_up(payload: AuthSignUpRequest, db: Session = Depends(get_db)) -> AuthTo
         exploit_default="auto",
         share_data_opt_in=payload.remember,
         rating_hint=1800,
+        verified=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     token = create_token(user)
+    refresh_token = create_refresh_token(user)
     return AuthTokenResponse(
         token=token,
-        user=UserResponse(
-            user_id=user.id,
-            username=user.username,
-            rating_hint=user.rating_hint,
-            exploit_default=user.exploit_default,
-            share_data_opt_in=user.share_data_opt_in,
-        ),
+        refresh_token=refresh_token,
+        user=_to_user_response(user),
     )
+
+
+@router.post("/refresh", response_model=AuthTokenResponse)
+def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> AuthTokenResponse:
+    _ensure_enabled()
+    try:
+        data = jwt.decode(payload.refresh_token, settings.jwt_refresh_secret, algorithms=["HS256"])
+        if data.get("type") != "refresh":
+            raise jwt.PyJWTError("Invalid token type")  # type: ignore[attr-defined]
+    except jwt.PyJWTError as exc:  # type: ignore[attr-defined]
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+
+    user_id = data.get("sub")
+    user = db.get(UserModel, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    token = create_token(user)
+    new_refresh = create_refresh_token(user)
+    return AuthTokenResponse(token=token, refresh_token=new_refresh, user=_to_user_response(user))

@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     auth_feature_enabled: bool = True
     jwt_secret: str = "change-me-dev-secret"
     jwt_exp_minutes: int = 60
+    jwt_refresh_secret: str = "change-me-refresh-secret"
+    jwt_refresh_days: int = 14
+    postmark_api_token: str | None = None
+    email_from: str | None = None
+    verification_url_base: str = "https://chessica.xyz/auth/verify"
 
 
 settings = Settings()
