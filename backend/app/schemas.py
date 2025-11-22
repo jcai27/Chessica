@@ -12,6 +12,13 @@ class TimeControl(BaseModel):
     initial_ms: int = Field(..., ge=0)
     increment_ms: int = Field(..., ge=0)
 
+    @model_validator(mode="after")
+    def validate_preset(self) -> "TimeControl":
+        allowed = {(300000, 0), (600000, 0), (1800000, 0)}
+        if (self.initial_ms, self.increment_ms) not in allowed:
+            raise ValueError("Time control must be 5+0, 10+0, or 30+0")
+        return self
+
 
 DifficultyLevel = Literal["beginner", "intermediate", "advanced", "expert", "grandmaster", "custom"]
 

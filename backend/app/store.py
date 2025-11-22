@@ -29,6 +29,11 @@ from .schemas import (
 )
 
 DEFAULT_FEN = chess.STARTING_FEN
+TIME_CONTROL_PRESETS = {
+    "blitz": {"initial_ms": 300000, "increment_ms": 0},
+    "rapid": {"initial_ms": 600000, "increment_ms": 0},
+    "classical": {"initial_ms": 1800000, "increment_ms": 0},
+}
 DIFFICULTY_PRESETS = [
     {"name": "beginner", "rating": 1320, "depth": 1},
     {"name": "intermediate", "rating": 1600, "depth": 2},
@@ -43,16 +48,120 @@ K_FACTOR = 32
 _rating_book: dict[str, int] = {}
 
 
+def _table_exists(table: str) -> bool:
+    with SessionLocal() as db:
+        try:
+            dialect = db.bind.dialect.name  # type: ignore[attr-defined]
+        except Exception:
+            return False
+        try:
+            if dialect == "sqlite":
+                row = db.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table' AND name=:t"), {"t": table}
+                ).fetchone()
+                return bool(row)
+            row = db.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name=:t"), {"t": table}
+            ).fetchone()
+            return bool(row)
+        except Exception:
+            return False
+
+
+def _column_exists(table: str, column: str) -> bool:
+    with SessionLocal() as db:
+        try:
+            dialect = db.bind.dialect.name  # type: ignore[attr-defined]
+        except Exception:
+            return False
+        try:
+            if dialect == "sqlite":
+                rows = db.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                return any(row[1] == column for row in rows)
+            row = db.execute(
+                text(
+                    """
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name=:t AND column_name=:c
+                    """
+                ),
+                {"t": table, "c": column},
+            ).fetchone()
+            return bool(row)
+        except Exception:
+            return False
+
+
+def _migrate_sessions_table() -> None:
+    if not _table_exists("sessions"):
+        return
+    if _column_exists("sessions", "time_control_label"):
+        return
+    with SessionLocal() as db:
+        try:
+            db.execute(text("ALTER TABLE sessions ADD COLUMN time_control_label TEXT DEFAULT 'blitz'"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
+def _migrate_player_ratings_table() -> None:
+    if not _table_exists("player_ratings"):
+        return
+    if _column_exists("player_ratings", "time_control"):
+        return
+    with SessionLocal() as db:
+        try:
+            db.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS player_ratings_v2 (
+                        player_id TEXT NOT NULL,
+                        time_control TEXT NOT NULL,
+                        rating INTEGER NOT NULL DEFAULT 1500,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (player_id, time_control)
+                    )
+                    """
+                )
+            )
+            db.execute(
+                text(
+                    """
+                    INSERT INTO player_ratings_v2 (player_id, time_control, rating, updated_at)
+                    SELECT player_id, 'blitz', rating, COALESCE(updated_at, CURRENT_TIMESTAMP)
+                    FROM player_ratings
+                    """
+                )
+            )
+            db.execute(text("DROP TABLE player_ratings"))
+            db.execute(text("ALTER TABLE player_ratings_v2 RENAME TO player_ratings"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
+def classify_time_control(initial_ms: int, increment_ms: int) -> str:
+    for name, cfg in TIME_CONTROL_PRESETS.items():
+        if cfg["initial_ms"] == initial_ms and cfg["increment_ms"] == increment_ms:
+            return name
+    raise ValueError("Unsupported time control; use 5+0, 10+0, or 30+0.")
+
+
 def _ensure_ratings_table() -> None:
+    _migrate_sessions_table()
+    _migrate_player_ratings_table()
     with SessionLocal() as db:
         try:
             db.execute(
                 text(
                     """
                     CREATE TABLE IF NOT EXISTS player_ratings (
-                        player_id TEXT PRIMARY KEY,
+                        player_id TEXT NOT NULL,
+                        time_control TEXT NOT NULL,
                         rating INTEGER NOT NULL DEFAULT 1500,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (player_id, time_control)
                     )
                     """
                 )
@@ -62,20 +171,23 @@ def _ensure_ratings_table() -> None:
             db.rollback()
 
 
-def _get_rating(player_id: str | None) -> int:
+def _get_rating(player_id: str | None, time_control: str = "blitz") -> int:
     if not player_id:
         return DEFAULT_RATING
     try:
         with SessionLocal() as db:
-            row = db.execute(text("SELECT rating FROM player_ratings WHERE player_id=:pid"), {"pid": player_id}).fetchone()
+            row = db.execute(
+                text("SELECT rating FROM player_ratings WHERE player_id=:pid AND time_control=:tc"),
+                {"pid": player_id, "tc": time_control},
+            ).fetchone()
             if row and row[0] is not None:
                 return int(row[0])
     except Exception:
         pass
-    return _rating_book.get(player_id, DEFAULT_RATING)
+    return _rating_book.get(f"{player_id}:{time_control}", DEFAULT_RATING)
 
 
-def _set_rating(player_id: str | None, rating: int) -> None:
+def _set_rating(player_id: str | None, rating: int, time_control: str = "blitz") -> None:
     if not player_id:
         return
     try:
@@ -83,43 +195,47 @@ def _set_rating(player_id: str | None, rating: int) -> None:
             db.execute(
                 text(
                     """
-                    INSERT INTO player_ratings (player_id, rating) VALUES (:pid, :r)
-                    ON CONFLICT(player_id) DO UPDATE SET rating=excluded.rating, updated_at=CURRENT_TIMESTAMP
+                    INSERT INTO player_ratings (player_id, time_control, rating)
+                    VALUES (:pid, :tc, :r)
+                    ON CONFLICT(player_id, time_control) DO UPDATE
+                    SET rating=excluded.rating, updated_at=CURRENT_TIMESTAMP
                     """
                 ),
-                {"pid": player_id, "r": rating},
+                {"pid": player_id, "tc": time_control, "r": rating},
             )
             db.commit()
             return
     except Exception:
         pass
-    _rating_book[player_id] = rating
+    _rating_book[f"{player_id}:{time_control}"] = rating
 
 
 def _expected_score(rating_a: int, rating_b: int) -> float:
     return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
 
 
-def apply_rating_result(player_id: str | None, opponent_rating: int, score: float) -> tuple[int, int]:
-    current = _get_rating(player_id)
+def apply_rating_result(player_id: str | None, opponent_rating: int, score: float, time_control: str) -> tuple[int, int]:
+    current = _get_rating(player_id, time_control=time_control)
     expected = _expected_score(current, opponent_rating)
     new_rating = round(current + K_FACTOR * (score - expected))
     delta = new_rating - current
-    _set_rating(player_id, new_rating)
+    _set_rating(player_id, new_rating, time_control=time_control)
     return new_rating, delta
 
 
-def apply_head_to_head(player_a: str | None, player_b: str | None, score_a: float) -> tuple[tuple[int, int], tuple[int, int]]:
-    rating_a = _get_rating(player_a)
-    rating_b = _get_rating(player_b)
+def apply_head_to_head(
+    player_a: str | None, player_b: str | None, score_a: float, time_control: str
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    rating_a = _get_rating(player_a, time_control=time_control)
+    rating_b = _get_rating(player_b, time_control=time_control)
     expected_a = _expected_score(rating_a, rating_b)
     expected_b = 1 - expected_a
     new_a = round(rating_a + K_FACTOR * (score_a - expected_a))
     new_b = round(rating_b + K_FACTOR * ((1 - score_a) - expected_b))
     delta_a = new_a - rating_a
     delta_b = new_b - rating_b
-    _set_rating(player_a, new_a)
-    _set_rating(player_b, new_b)
+    _set_rating(player_a, new_a, time_control=time_control)
+    _set_rating(player_b, new_b, time_control=time_control)
     return (new_a, delta_a), (new_b, delta_b)
 
 
@@ -163,6 +279,7 @@ class SessionRecord:
     updated_at: datetime
     fen: str
     clocks: ClockState
+    time_control: str = "blitz"
     initial_fen: str = DEFAULT_FEN
     move_log: List[Dict[str, Any]] = field(default_factory=list)
     opponent_profile: OpponentProfile = field(
@@ -246,6 +363,7 @@ class SessionRecord:
             "updated_at": self.updated_at.isoformat(),
             "fen": self.fen,
             "clocks": self.clocks.model_dump(),
+            "time_control": self.time_control,
             "moves": self.move_log,
             "opponent_profile": self.opponent_profile.model_dump(),
             "initial_fen": self.initial_fen,
@@ -274,6 +392,7 @@ class SessionRecord:
             fen=payload["fen"],
             initial_fen=payload.get("initial_fen", DEFAULT_FEN),
             clocks=ClockState.model_validate(payload["clocks"]),
+            time_control=payload.get("time_control", "blitz"),
             move_log=_normalize_moves(payload.get("moves", [])),
             opponent_profile=OpponentProfile.model_validate(payload["opponent_profile"]),
             engine_depth=payload.get("engine_depth", settings.engine_default_depth),
@@ -309,6 +428,7 @@ class SessionRecord:
             fen=model.fen,
             initial_fen=getattr(model, "initial_fen", DEFAULT_FEN),
             clocks=ClockState(player_ms=model.clock_player_ms, engine_ms=model.clock_engine_ms),
+            time_control=getattr(model, "time_control_label", "blitz"),
             move_log=move_log,
             opponent_profile=OpponentProfile.model_validate(model.opponent_profile),
             engine_depth=model.engine_depth,
@@ -351,6 +471,7 @@ class SessionRepository:
         session_id = f"sess_{uuid4().hex}"
         player_color, engine_color = self._resolve_colors(payload.color)
         depth, rating, difficulty = resolve_engine_settings(payload)
+        time_control_label = classify_time_control(payload.time_control.initial_ms, payload.time_control.increment_ms)
         record = SessionRecord(
             session_id=session_id,
             player_color=player_color,
@@ -362,9 +483,11 @@ class SessionRepository:
             fen=DEFAULT_FEN,
             initial_fen=DEFAULT_FEN,
             clocks=ClockState(player_ms=payload.time_control.initial_ms, engine_ms=payload.time_control.initial_ms),
+            time_control=time_control_label,
             engine_depth=depth,
             engine_rating=rating,
             difficulty=difficulty,
+            player_rating=_get_rating(None, time_control_label),
         )
         record.opponent_profile = OpponentProfile(
             style=OpponentStyle(tactical=0.5, risk=0.5),
@@ -382,6 +505,7 @@ class SessionRepository:
                 player_rating=record.player_rating,
                 player_rating_delta=record.player_rating_delta,
                 player_id=record.player_id,
+                time_control_label=record.time_control,
                 status=record.status,
                 fen=record.fen,
                 initial_fen=record.initial_fen,
@@ -411,6 +535,7 @@ class SessionRepository:
         elif payload.color == "auto" and white_id and black_id and random.choice([True, False]):
             white_id, black_id = black_id, white_id
 
+        time_control_label = classify_time_control(payload.time_control.initial_ms, payload.time_control.increment_ms)
         record = SessionRecord(
             session_id=session_id,
             player_color="white",
@@ -422,6 +547,7 @@ class SessionRepository:
             fen=payload.seed_fen or DEFAULT_FEN,
             initial_fen=payload.seed_fen or DEFAULT_FEN,
             clocks=ClockState(player_ms=payload.time_control.initial_ms, engine_ms=payload.time_control.initial_ms),
+            time_control=time_control_label,
             difficulty="advanced",
             engine_depth=settings.engine_default_depth,
             engine_rating=depth_to_rating(settings.engine_default_depth),
@@ -449,6 +575,7 @@ class SessionRepository:
                 status=record.status,
                 fen=record.fen,
                 initial_fen=record.initial_fen,
+                time_control_label=record.time_control,
                 clock_player_ms=record.clocks.player_ms,
                 clock_engine_ms=record.clocks.engine_ms,
                 moves=list(record.move_log),
@@ -500,6 +627,8 @@ class SessionRepository:
             model.player_id = record.player_id
             model.player_rating = record.player_rating
             model.player_rating_delta = record.player_rating_delta
+            if hasattr(model, "time_control_label"):
+                model.time_control_label = record.time_control
             model.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(model)
@@ -522,7 +651,9 @@ class SessionRepository:
 
     def apply_engine_rating(self, record: SessionRecord, winner: str | None) -> SessionRecord:
         score = 0.5 if winner == "draw" or winner is None else (1.0 if winner == "player" else 0.0)
-        new_rating, delta = apply_rating_result(record.player_id or "guest", record.engine_rating, score)
+        new_rating, delta = apply_rating_result(
+            record.player_id or "guest", record.engine_rating, score, record.time_control
+        )
         record.player_rating = new_rating
         record.player_rating_delta = delta
         return self.save(record)
@@ -537,7 +668,7 @@ class SessionRepository:
         else:
             score_white = 0.5
         (white_rating, white_delta), (black_rating, black_delta) = apply_head_to_head(
-            record.player_white_id, record.player_black_id, score_white
+            record.player_white_id, record.player_black_id, score_white, record.time_control
         )
         rating_map = {
             "white": {"rating": white_rating, "delta": white_delta},
@@ -548,8 +679,8 @@ class SessionRepository:
         record = self.save(record)
         return record, rating_map
 
-    def get_player_rating(self, player_id: str | None) -> int:
-        return _get_rating(player_id or "guest")
+    def get_player_rating(self, player_id: str | None, time_control: str = "blitz") -> int:
+        return _get_rating(player_id or "guest", time_control=time_control)
 
     @staticmethod
     def _resolve_colors(requested: str) -> tuple[str, str]:

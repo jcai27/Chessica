@@ -32,6 +32,7 @@ class SessionModel(Base):
     winner = Column(String, nullable=True)
     fen = Column(String, nullable=False)
     initial_fen = Column(String, nullable=False, default=chess.STARTING_FEN)
+    time_control_label = Column(String, nullable=False, default="blitz")
     clock_player_ms = Column(Integer, default=300000, nullable=False)
     clock_engine_ms = Column(Integer, default=300000, nullable=False)
     moves = Column(JSON, default=list, nullable=False)
@@ -57,6 +58,7 @@ class SessionModel(Base):
             "status": self.status,
             "fen": self.fen,
             "initial_fen": self.initial_fen,
+            "time_control_label": self.time_control_label,
             "clock_player_ms": self.clock_player_ms,
             "clock_engine_ms": self.clock_engine_ms,
             "moves": list(self.moves or []),

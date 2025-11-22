@@ -6,6 +6,12 @@ import { API_BASE, DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
 import { DIFFICULTY_PRESETS, describePreset } from "../lib/difficulties";
 import { describeEval, formatEval, formatMs } from "../lib/format";
 
+const TIME_PRESETS = [
+  { id: "blitz", label: "Blitz 5+0", time_control: { initial_ms: 300000, increment_ms: 0 } },
+  { id: "rapid", label: "Rapid 10+0", time_control: { initial_ms: 600000, increment_ms: 0 } },
+  { id: "classical", label: "Classical 30+0", time_control: { initial_ms: 1800000, increment_ms: 0 } },
+];
+
 const parseCoachSummary = (summary) => {
   const text = (summary || "").trim();
   if (!text) return [];
@@ -34,6 +40,7 @@ function ComputerPage() {
   const [colorChoice, setColorChoice] = useState("auto");
   const [exploitMode, setExploitMode] = useState("auto");
   const [difficulty, setDifficulty] = useState("advanced");
+  const [timePreset, setTimePreset] = useState("blitz");
   const [statusText, setStatusText] = useState("No active session.");
   const [pending, setPending] = useState(false);
   const [latestEval, setLatestEval] = useState(null);
@@ -185,19 +192,18 @@ function ComputerPage() {
     setPending(true);
     setMessage("");
     try {
+      const tc = TIME_PRESETS.find((p) => p.id === timePreset)?.time_control || DEFAULT_TIME_CONTROL;
       const payload = {
         variant: "standard",
         color: colorChoice,
         exploit_mode: exploitMode,
         difficulty,
-        time_control: DEFAULT_TIME_CONTROL,
+        time_control: tc,
       };
       const created = await api.createSession(payload);
       const detail = await api.sessionDetail(created.session_id);
       setSession(detail);
-      setStatusText(
-        `Session ${detail.session_id} • Engine plays ${detail.engine_color} • ${describePreset(detail.difficulty)}`,
-      );
+      setStatusText(`Session ${detail.session_id} • ${timePreset.toUpperCase()} • ${describePreset(detail.difficulty)}`);
       resetBoards();
       setGameBanner(null);
       chessRef.current.load(detail.fen);
@@ -444,6 +450,18 @@ function ComputerPage() {
             <div className="tab-panel">
               {activeTab === "controls" && (
                 <form className="controls-form" onSubmit={handleStart}>
+                  <div className="time-preset-grid">
+                    {TIME_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className={`time-pill ${timePreset === preset.id ? "active" : ""}`}
+                        onClick={() => setTimePreset(preset.id)}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
                   <label className="select-field">
                     <span>Color</span>
                     <select value={colorChoice} onChange={(e) => setColorChoice(e.target.value)}>

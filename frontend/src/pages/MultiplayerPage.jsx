@@ -5,6 +5,12 @@ import { api } from "../lib/api";
 import { DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
 import { formatMs } from "../lib/format";
 
+const TIME_PRESETS = [
+  { id: "blitz", label: "Blitz 5+0", time_control: { initial_ms: 300000, increment_ms: 0 } },
+  { id: "rapid", label: "Rapid 10+0", time_control: { initial_ms: 600000, increment_ms: 0 } },
+  { id: "classical", label: "Classical 30+0", time_control: { initial_ms: 1800000, increment_ms: 0 } },
+];
+
 const queueDefaults = {
   player_id: "",
   color: "auto",
@@ -34,6 +40,7 @@ function MultiplayerPage() {
   const [coachSummary, setCoachSummary] = useState("");
   const [coachLoading, setCoachLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("match");
+  const [timePreset, setTimePreset] = useState("blitz");
   const [pendingPromotion, setPendingPromotion] = useState(null);
   const [coachData, setCoachData] = useState(null);
   const [gameBanner, setGameBanner] = useState(null);
@@ -161,11 +168,15 @@ function MultiplayerPage() {
     setMessage("");
     setQueueStatus("Joining queue...");
     try {
+      const tc = TIME_PRESETS.find((p) => p.id === timePreset)?.time_control || DEFAULT_TIME_CONTROL;
       const payload = {
         player_id: form.player_id.trim(),
         color: form.color,
-        time_control: { initial_ms: Number(form.initial_ms), increment_ms: Number(form.increment_ms) },
+        time_control: tc,
       };
+      setClocks(tc);
+      setLiveClocks(tc);
+      baseClocksRef.current = tc;
       const res = await api.queueJoin(payload);
       if (res.status === "matched" && res.session_id) {
         await handleMatched(res.session_id, res.player_color, res.opponent_id);
@@ -454,6 +465,23 @@ function MultiplayerPage() {
             <div className="tab-panel">
               {activeTab === "match" && (
                 <form className="controls-form" onSubmit={handleQueue}>
+                  <div className="time-preset-grid">
+                    {TIME_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className={`time-pill ${timePreset === preset.id ? "active" : ""}`}
+                        onClick={() => {
+                          setTimePreset(preset.id);
+                          setClocks(preset.time_control);
+                          setLiveClocks(preset.time_control);
+                          baseClocksRef.current = preset.time_control;
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
                   <label className="select-field">
                     <span>Player ID</span>
                     <input
@@ -471,26 +499,6 @@ function MultiplayerPage() {
                       <option value="white">White</option>
                       <option value="black">Black</option>
                     </select>
-                  </label>
-                  <label className="select-field">
-                    <span>Initial (ms)</span>
-                    <input
-                      type="number"
-                      value={form.initial_ms}
-                      onChange={(e) => setForm((prev) => ({ ...prev, initial_ms: e.target.value }))}
-                      min="60000"
-                      step="60000"
-                    />
-                  </label>
-                  <label className="select-field">
-                    <span>Increment (ms)</span>
-                    <input
-                      type="number"
-                      value={form.increment_ms}
-                      onChange={(e) => setForm((prev) => ({ ...prev, increment_ms: e.target.value }))}
-                      min="0"
-                      step="1000"
-                    />
                   </label>
                   <div className="difficulty-indicator">{queueStatus}</div>
                   <div className="inline-actions compact">

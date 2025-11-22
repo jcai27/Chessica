@@ -1,35 +1,23 @@
 import { Link } from "react-router-dom";
 import LogoMark from "../components/LogoMark";
 
-const modes = [
+const quickLinks = [
   {
-    title: "Engine Lab",
-    description: "Stockfish with exploit-aware patches, guided narration, and coach-style recaps.",
-    meta: "Local, no CDN",
-    cta: "Play vs Computer",
+    title: "Play vs Computer",
+    description: "Engine lab with coach, plans, and structured analysis.",
     to: "/computer",
     tone: "primary",
   },
   {
-    title: "Online Queue",
-    description: "Clocked multiplayer with streamed boards and fair pairing expectations.",
-    meta: "Live opponents",
-    cta: "Go Online",
+    title: "Online Match",
+    description: "Queue, pair, and play humans with clocks that stay in sync.",
     to: "/multiplayer",
   },
   {
     title: "Replay Room",
-    description: "Load any session id, scrub the move list, and export PGN for study.",
-    meta: "Study & share",
-    cta: "Browse Replays",
+    description: "Load a session id, scroll moves, export PGN.",
     to: "/replay",
   },
-];
-
-const highlights = [
-  "Local-first setup with no third-party CDN dependencies.",
-  "Narration, PGN export, and move scrubber built in.",
-  "Engine controls tuned for quick testing or deeper drills.",
 ];
 
 function HomePage() {
@@ -37,11 +25,10 @@ function HomePage() {
     <div className="landing landing-shell">
       <header className="landing-hero">
         <div className="hero-copy">
-          <div className="pill pill-soft">Alpha build</div>
-          <h1>Command Chessica&apos;s board</h1>
-          <p>
-            Launch straight into an engine lab, queue for humans, or drop into a replay room. Buttons stay anchored so
-            you can hop modes without losing your place.
+          <div className="pill pill-soft">Chessica</div>
+          <h1>Three ways to play, no clutter</h1>
+          <p className="muted">
+            Drop into the engine lab, queue online, or review a session. Everything fits on screen and stays lean.
           </p>
           <div className="hero-actions">
             <Link className="cta-chip primary" to="/computer">
@@ -56,8 +43,7 @@ function HomePage() {
           </div>
           <div className="hero-points">
             <span className="point-chip">Exploit-aware Stockfish</span>
-            <span className="point-chip">Narration + PGN export</span>
-            <span className="point-chip">Local-first, zero CDN</span>
+            <span className="point-chip">Coach + analysis built in</span>
           </div>
         </div>
         <div className="hero-panel card">
@@ -66,27 +52,17 @@ function HomePage() {
               <LogoMark />
             </div>
             <div>
-              <p className="eyebrow">Launch bay</p>
-              <strong>Pick a mode to boot instantly.</strong>
-              <span className="muted">Keeps to the viewport so you can swap without scrolling.</span>
+              <p className="eyebrow">Quick launch</p>
+              <strong>Pick a lane and go.</strong>
+              <span className="muted">No scrolling, just play.</span>
             </div>
           </div>
           <div className="hero-panel__actions">
-            {modes.map((mode) => (
+            {quickLinks.map((mode) => (
               <Link key={mode.to} className="cta-chip primary wide" to={mode.to}>
-                {mode.cta}
+                {mode.title}
               </Link>
             ))}
-          </div>
-          <div className="hero-panel__meta">
-            <div className="meta-chip">
-              <span className="dot success" />
-              Local compute, no cloud costs.
-            </div>
-            <div className="meta-chip">
-              <span className="dot accent" />
-              Live controls stay sticky.
-            </div>
           </div>
         </div>
       </header>
@@ -95,68 +71,24 @@ function HomePage() {
         <section className="mode-section card">
           <div className="section-title">
             <div>
-              <p className="eyebrow">Modes</p>
-              <h2>Pick how you want to play</h2>
+              <p className="eyebrow">Shortcuts</p>
+              <h2>Choose your next action</h2>
             </div>
-            <span className="muted">Buttons are grouped, not full-bleed.</span>
+            <span className="muted">Kept compact on purpose.</span>
           </div>
-          <div className="mode-grid">
-            {modes.map((mode) => (
+          <div className="mode-grid compact">
+            {quickLinks.map((mode) => (
               <article key={mode.title} className={`mode-card ${mode.tone ?? ""}`}>
                 <div className="mode-card__top">
                   <h3>{mode.title}</h3>
-                  <span className="mode-meta">{mode.meta}</span>
                 </div>
-                <p>{mode.description}</p>
+                <p className="muted">{mode.description}</p>
                 <Link className="cta-chip ghost" to={mode.to}>
-                  {mode.cta}
+                  Enter
                 </Link>
               </article>
             ))}
           </div>
-        </section>
-
-        <section className="info-grid">
-          <article className="info-card card">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">What&apos;s inside</p>
-                <h3>Comfortable controls for quick sessions</h3>
-              </div>
-              <span className="pill pill-soft">Fast setup</span>
-            </div>
-            <ul className="note-list">
-              {highlights.map((item) => (
-                <li key={item}>
-                  <span className="dot accent" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
-
-          <article className="info-card card">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">Replay-ready</p>
-                <h3>Keep track of every run</h3>
-              </div>
-              <span className="pill pill-soft">Study mode</span>
-            </div>
-            <p className="muted">
-              Replays sit one tap away from the hero buttons so you can load a session id, scrub moves, and export PGN
-              without hunting through menus.
-            </p>
-            <div className="callout">
-              <div>
-                <strong>Jump straight in</strong>
-                <p className="muted">Open the replay room to continue where you left off.</p>
-              </div>
-              <Link className="cta-chip primary" to="/replay">
-                Open Replay Room
-              </Link>
-            </div>
-          </article>
         </section>
       </main>
     </div>

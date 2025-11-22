@@ -111,7 +111,10 @@ def _build_pgn(record: SessionRecord) -> str:
 
 @router.post("", response_model=SessionResponse, status_code=201)
 def create_session(payload: SessionCreateRequest) -> SessionResponse:
-    record = store.create_session(payload)
+    try:
+        record = store.create_session(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return record.to_response()
 
 
@@ -180,7 +183,7 @@ async def make_move(
     if not record.player_id and payload.player_id:
         record.player_id = payload.player_id
     if record.player_id:
-        record.player_rating = store.get_player_rating(record.player_id)
+        record.player_rating = store.get_player_rating(record.player_id, record.time_control)
 
     board = Board.from_fen(record.fen)
     clocks = ClockState.model_validate(payload.clock.model_dump())

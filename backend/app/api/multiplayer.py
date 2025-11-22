@@ -25,7 +25,7 @@ from ..schemas import (
     QueueStatusResponse,
     OpeningInfo,
 )
-from ..store import store
+from ..store import store, classify_time_control
 from ..realtime import stream_manager
 from ..telemetry import log_event
 from ..openings import detect_opening
@@ -54,7 +54,8 @@ def _match_key(player_id: str) -> str:
 
 
 def _bucket(time_control: ClockState) -> str:
-    return f"{time_control.initial_ms}:{time_control.increment_ms}"
+    label = classify_time_control(time_control.initial_ms, time_control.increment_ms)
+    return label
 
 
 _MATERIAL_VALUES = {
@@ -119,13 +120,19 @@ def _assign_colors(requester: str, preferred_color: str, opponent: dict) -> tupl
 
 @router.post("/sessions", response_model=MultiplayerSessionResponse, status_code=201)
 def create_multiplayer_session(payload: MultiplayerSessionCreateRequest) -> MultiplayerSessionResponse:
-    record = store.create_multiplayer_session(payload)
+    try:
+        record = store.create_multiplayer_session(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return record.to_multiplayer_response()
 
 
 @router.post("/queue", response_model=QueueStatusResponse)
 def join_queue(payload: QueueJoinRequest) -> QueueStatusResponse:
-    bucket = _bucket(payload.time_control)
+    try:
+        bucket = _bucket(payload.time_control)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     match = _pop_match(payload.player_id, bucket, payload.color)
     if match:
         white_id, black_id, player_color = _assign_colors(payload.player_id, payload.color, match)
