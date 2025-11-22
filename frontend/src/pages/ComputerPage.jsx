@@ -51,6 +51,7 @@ function ComputerPage() {
   const coachPlans = coachData?.plans || [];
   const coachFeatures = coachData?.position_features;
   const coachOpening = coachData?.opening;
+  const [coachView, setCoachView] = useState("ideas");
 
   useEffect(() => {
     return () => {
@@ -571,16 +572,64 @@ function ComputerPage() {
                   <div className="insight-eval">
                     <div className="eval-score">{formatEval(latestEval ?? 0)}</div>
                     <span>{describeEval(latestEval ?? 0)}</span>
-                    {coachLines.length ? (
-                      <ul className="coach-lines">
-                        {coachLines.map((line, idx) => (
-                          <li key={`${line}-${idx}`}>{line}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="muted">No coach summary yet.</p>
-                    )}
                   </div>
+                  <div className="coach-tabs">
+                    {[
+                      { key: "ideas", label: "Ideas" },
+                      { key: "risks", label: "Risks" },
+                      { key: "candidates", label: "Candidates" },
+                      { key: "summary", label: "Summary" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`coach-tab ${coachView === tab.key ? "active" : ""}`}
+                        onClick={() => setCoachView(tab.key)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  {coachView === "ideas" && (
+                    <ul className="coach-lines">
+                      {(coachData?.ideas || coachLines).map((line, idx) => (
+                        <li key={`${line}-${idx}`}>{line}</li>
+                      ))}
+                      {!(coachData?.ideas || coachLines).length && <li className="muted">No ideas yet.</li>}
+                    </ul>
+                  )}
+                  {coachView === "risks" && (
+                    <ul className="coach-lines">
+                      {(coachData?.risks || []).map((line, idx) => (
+                        <li key={`${line}-${idx}`}>{line}</li>
+                      ))}
+                      {!(coachData?.risks || []).length && <li className="muted">No explicit risks flagged.</li>}
+                    </ul>
+                  )}
+                  {coachView === "candidates" && (
+                    <ul className="coach-lines">
+                      {(coachData?.candidates || coachPlans).map((plan, idx) => (
+                        <li key={`${plan.name || idx}-${idx}`}>
+                          <strong>{plan.name || plan?.idea || "Plan"}</strong>{" "}
+                          {plan.example_moves ? `(${(plan.example_moves || []).join(", ")})` : ""}
+                        </li>
+                      ))}
+                      {!(coachData?.candidates || coachPlans).length && <li className="muted">No candidates yet.</li>}
+                    </ul>
+                  )}
+                  {coachView === "summary" && (
+                    <>
+                      {coachLines.length ? (
+                        <ul className="coach-lines">
+                          {coachLines.map((line, idx) => (
+                            <li key={`${line}-${idx}`}>{line}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">No coach summary yet.</p>
+                      )}
+                    </>
+                  )}
                   {coachOpening && (
                     <div className="summary-block">
                       <strong>{coachOpening.name}</strong>

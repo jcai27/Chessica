@@ -126,6 +126,11 @@ class CoachSummaryResponse(BaseModel):
     plans: list[dict] | None = None
     opening: OpeningInfo | None = None
     mode: Literal["ideas", "lines"] = "ideas"
+    ideas: list[str] | None = None
+    risks: list[str] | None = None
+    candidates: list[dict] | None = None
+    tone: str | None = None
+    lines: list[str] | None = None
 
 
 class ReplayMove(BaseModel):

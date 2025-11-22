@@ -431,6 +431,9 @@ async def summarize_position(session_id: str = Path(..., description="Session id
     opening_info = OpeningInfo(name=opening["name"], eco=opening["eco"], ply=len(opening["uci"])) if opening else None
     features = engine.extract_position_features(board.raw)
     plans = engine.build_candidate_plans(board.raw, record.difficulty, record.engine_rating)
+    ideas = [f"{p.get('name')}: {p.get('idea')}" for p in plans][:3] if plans else []
+    risks = list({p.get("risk") for p in plans if p.get("risk")})[:3] if plans else []
+    candidates = [{"name": p.get("name"), "example_moves": p.get("example_moves")} for p in plans] if plans else []
     player_feedback = None
     if record.move_log:
         player_feedback = record.move_log[-1].get("commentary")
@@ -454,6 +457,10 @@ async def summarize_position(session_id: str = Path(..., description="Session id
         plans=plans,
         opening=opening_info,
         mode="ideas",
+        ideas=ideas or None,
+        risks=risks or None,
+        candidates=candidates or None,
+        tone=record.time_control,
     )
     await stream_update(session_id, {"type": "coach_update", "payload": response.model_dump()})
     return response

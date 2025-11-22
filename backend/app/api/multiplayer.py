@@ -29,6 +29,7 @@ from ..store import store, classify_time_control
 from ..realtime import stream_manager
 from ..telemetry import log_event
 from ..openings import detect_opening
+from ..schemas import CoachSummaryResponse
 
 router = APIRouter(prefix="/multiplayer", tags=["multiplayer"])
 matchmaking_queue: dict[str, dict] = {}
@@ -350,6 +351,29 @@ async def play_move(
     }
     await stream_manager.broadcast(session_id, {"type": "player_move", "payload": event_payload})
     log_event(session_id, "player_move", event_payload)
+
+    # Stream a lightweight coach update (ideas/risks/candidates) without revealing opponent lines.
+    try:
+        features = engine.extract_position_features(board.raw)
+        plans = engine.build_candidate_plans(board.raw, "advanced", depth_to_rating(settings.engine_default_depth))
+        ideas = [f"{p.get('name')}: {p.get('idea')}" for p in plans][:3] if plans else []
+        risks = list({p.get("risk") for p in plans if p.get("risk")})[:3] if plans else []
+        candidates = [{"name": p.get("name"), "example_moves": p.get("example_moves")} for p in plans] if plans else []
+        coach_payload = CoachSummaryResponse(
+            summary="",
+            eval_cp=eval_cp,
+            position_features=features,
+            plans=plans,
+            opening=opening,
+            mode="ideas",
+            ideas=ideas or None,
+            risks=risks or None,
+            candidates=candidates or None,
+            tone=record.time_control,
+        )
+        await stream_manager.broadcast(session_id, {"type": "coach_update", "payload": coach_payload.model_dump()})
+    except Exception:
+        pass
 
     return response
 

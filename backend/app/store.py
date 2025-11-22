@@ -317,6 +317,7 @@ class SessionRecord:
             status=self.status,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            time_control_label=self.time_control,
         )
 
     def to_detail(self) -> SessionDetail:
@@ -348,6 +349,7 @@ class SessionRecord:
             clocks=self.clocks,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            time_control_label=self.time_control,
         )
 
     def to_cache(self) -> Dict[str, Any]:

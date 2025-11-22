@@ -41,6 +41,7 @@ function MultiplayerPage() {
   const [coachLoading, setCoachLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("match");
   const [timePreset, setTimePreset] = useState("blitz");
+  const [coachView, setCoachView] = useState("ideas");
   const [pendingPromotion, setPendingPromotion] = useState(null);
   const [coachData, setCoachData] = useState(null);
   const [gameBanner, setGameBanner] = useState(null);
@@ -528,10 +529,54 @@ function MultiplayerPage() {
                   <button type="button" disabled={!sessionId || coachLoading} onClick={runCoach}>
                     {coachLoading ? "Generating..." : "Explain Position"}
                   </button>
-                  {coachSummary ? (
-                    <p className="muted">{coachSummary}</p>
-                  ) : (
-                    <p className="muted">Request a coach summary after moves are played.</p>
+                  <div className="coach-tabs">
+                    {[
+                      { key: "ideas", label: "Ideas" },
+                      { key: "risks", label: "Risks" },
+                      { key: "candidates", label: "Candidates" },
+                      { key: "summary", label: "Summary" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`coach-tab ${coachView === tab.key ? "active" : ""}`}
+                        onClick={() => setCoachView(tab.key)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  {coachView === "ideas" && (
+                    <ul className="coach-lines">
+                      {(coachData?.ideas || coachSummary.split(/(?<=[.!?])\\s+/).filter(Boolean)).map((line, idx) => (
+                        <li key={`${line}-${idx}`}>{line}</li>
+                      ))}
+                      {!(coachData?.ideas || coachSummary)?.length && <li className="muted">No ideas yet.</li>}
+                    </ul>
+                  )}
+                  {coachView === "risks" && (
+                    <ul className="coach-lines">
+                      {(coachData?.risks || []).map((line, idx) => (
+                        <li key={`${line}-${idx}`}>{line}</li>
+                      ))}
+                      {!(coachData?.risks || []).length && <li className="muted">No explicit risks flagged.</li>}
+                    </ul>
+                  )}
+                  {coachView === "candidates" && (
+                    <ul className="coach-lines">
+                      {(coachData?.candidates || coachPlans).map((plan, idx) => (
+                        <li key={`${plan.name || idx}-${idx}`}>
+                          <strong>{plan.name || plan?.idea || "Plan"}</strong>{" "}
+                          {plan.example_moves ? `(${(plan.example_moves || []).join(", ")})` : ""}
+                        </li>
+                      ))}
+                      {!(coachData?.candidates || coachPlans).length && <li className="muted">No candidates yet.</li>}
+                    </ul>
+                  )}
+                  {coachView === "summary" && (
+                    <p className="muted">
+                      {coachSummary || "Request a coach summary after moves are played."}
+                    </p>
                   )}
                   {coachOpening && (
                     <div className="summary-block">

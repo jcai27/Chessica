@@ -359,6 +359,27 @@ body {
   gap: 0.35rem;
 }
 
+.coach-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.coach-tab {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.coach-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #051020;
+}
+
 .clock-bar {
   display: flex;
   align-items: center;
