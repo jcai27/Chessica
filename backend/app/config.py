@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     coach_rate_limit_window: float = 60.0
     coach_rate_limit_max: int = 10
     auth_feature_enabled: bool = True
+    jwt_secret: str = "change-me-dev-secret"
+    jwt_exp_minutes: int = 60
 
 
 settings = Settings()

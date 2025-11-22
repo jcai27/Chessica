@@ -6,6 +6,7 @@ const links = [
   { href: "/multiplayer", label: "Online" },
   { href: "/computer", label: "Vs Computer" },
   { href: "/replay", label: "Replay" },
+  { href: "/auth", label: "Account" },
 ];
 
 function NavBar() {

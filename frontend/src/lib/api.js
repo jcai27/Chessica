@@ -1,8 +1,15 @@
+import { getAuthToken } from "./auth";
 import { API_BASE } from "./config";
 
 async function request(path, options = {}) {
+  const token = getAuthToken();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers,
     ...options,
   });
   if (!res.ok) {
@@ -17,6 +24,21 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  authFeature() {
+    return request("/auth/feature");
+  },
+  sendLoginCode(email) {
+    return request("/auth/send-code", { method: "POST", body: JSON.stringify({ email }) });
+  },
+  signIn(payload) {
+    return request("/auth/sign-in", { method: "POST", body: JSON.stringify(payload) });
+  },
+  signUp(payload) {
+    return request("/auth/sign-up", { method: "POST", body: JSON.stringify(payload) });
+  },
+  me() {
+    return request("/me");
+  },
   createSession(payload) {
     return request("/sessions", { method: "POST", body: JSON.stringify(payload) });
   },

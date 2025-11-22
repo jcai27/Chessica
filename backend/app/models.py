@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List
+from uuid import uuid4
 
 import chess
 
@@ -76,3 +77,18 @@ class EngineEventModel(Base):
     event_type = Column(String, nullable=False)
     payload = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=lambda: uuid4().hex)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    username = Column(String, nullable=False)
+    rating_hint = Column(Integer, nullable=True)
+    exploit_default = Column(String, nullable=False, default="auto")
+    share_data_opt_in = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)

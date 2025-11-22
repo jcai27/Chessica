@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage";
 import ComputerPage from "./pages/ComputerPage";
 import MultiplayerPage from "./pages/MultiplayerPage";
 import ReplayPage from "./pages/ReplayPage";
+import AuthPage from "./pages/AuthPage";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/computer" element={<ComputerPage />} />
           <Route path="/multiplayer" element={<MultiplayerPage />} />
           <Route path="/replay" element={<ReplayPage />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

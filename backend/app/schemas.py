@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class TimeControl(BaseModel):
@@ -271,13 +271,26 @@ class SendCodeRequest(BaseModel):
 
 class AuthSignInRequest(BaseModel):
     email: EmailStr
-    code: str
+    password: Optional[str] = None
+    code: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_inputs(self) -> "AuthSignInRequest":
+        if not self.password and not self.code:
+            raise ValueError("Either password or code is required")
+        return self
 
 
 class AuthSignUpRequest(BaseModel):
     email: EmailStr
     password: str
     remember: bool = False
+
+    @model_validator(mode="after")
+    def validate_password(self) -> "AuthSignUpRequest":
+        if len(self.password or "") < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return self
 
 
 class AuthTokenResponse(BaseModel):
