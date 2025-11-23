@@ -63,6 +63,9 @@ export const api = {
   replay(sessionId) {
     return request(`/sessions/${sessionId}/replay`);
   },
+  get(endpoint) {
+    return request(endpoint);
+  },
   queueJoin(payload) {
     return request(`/multiplayer/queue`, { method: "POST", body: JSON.stringify(payload) });
   },

@@ -368,8 +368,18 @@ function ComputerPage() {
                 position={fen}
                 onPieceDrop={handleDrop}
                 boardOrientation={orientation}
-                animationDuration={150}
-                customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
+                animationDuration={200}
+                customBoardStyle={{
+                  borderRadius: 16,
+                  boxShadow: "0 12px 26px rgba(0,0,0,0.35)"
+                }}
+                customDarkSquareStyle={{ backgroundColor: "#779952" }}
+                customLightSquareStyle={{ backgroundColor: "#edeed1" }}
+                customPremoveDarkSquareStyle={{ backgroundColor: "#e67e22" }}
+                customPremoveLightSquareStyle={{ backgroundColor: "#f39c12" }}
+                showBoardNotation={true}
+                boardWidth={560}
+                arePiecesDraggable={!pendingPromotion && !gameBanner}
               />
             </div>
             {pendingPromotion && (

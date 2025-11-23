@@ -7,6 +7,7 @@ const links = [
   { href: "/computer", label: "Vs Computer" },
   { href: "/replay", label: "Replay" },
   { href: "/auth", label: "Account" },
+  { href: "/analytics", label: "Analytics" },
 ];
 
 function NavBar() {

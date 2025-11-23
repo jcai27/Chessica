@@ -280,7 +280,14 @@ async def make_move(
 
     board_before_engine_move = board.copy()
     try:
-        engine_move, eval_cp = engine.pick_engine_move(board, record.difficulty, record.engine_rating)
+        # Pass user_id if available to enable exploit search
+        user_id = record.player_id
+        engine_move, eval_cp, exploit_confidence, profile_data = engine.pick_engine_move(
+            board, 
+            record.difficulty, 
+            record.engine_rating,
+            user_id=user_id
+        )
     except ValueError:
         raise HTTPException(status_code=410, detail="Engine has no legal moves (game over).") from None
 
@@ -330,14 +337,18 @@ async def make_move(
     record.move_log.append(engine_insight)
     record.last_eval_cp = post_engine_eval
 
-    profile = engine.mock_opponent_profile()
+    # Use the real profile returned by the engine (or fallback)
+    from ..schemas import OpponentProfile
+    profile = OpponentProfile(
+        style=profile_data.get("style", {}),
+        motif_risk=profile_data.get("motif_risks", {})
+    )
     record.opponent_profile = profile
     record.fen = board.to_fen()
     record.clocks = clocks
 
     record = store.save(record)
 
-    exploit_confidence = engine.mock_exploit_confidence()
     game_state = engine.make_game_state(board)
     opening = detect_opening(record.moves)
     opening_info = OpeningInfo(name=opening["name"], eco=opening["eco"], ply=len(opening["uci"])) if opening else None

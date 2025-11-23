@@ -97,18 +97,6 @@
 .board-shell-react {
   background: var(--panel-soft);
   border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
-  padding: 0.35rem;
-  aspect-ratio: 1 / 1;
-  max-height: min(60vh, 60vw);
-  max-width: min(85vw, 560px);
-  width: 100%;
-  margin: 0 auto;
-}
-
-.analysis-list {
-  list-style: none;
-  padding: 0;
   margin: 0;
   display: grid;
   gap: 0.5rem;

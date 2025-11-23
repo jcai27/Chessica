@@ -97,3 +97,14 @@ class UserModel(Base):
     verified = Column(Boolean, default=False, nullable=False)
     verification_token = Column(String, nullable=True)
     verification_expires_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class OpponentProfileModel(Base):
+    __tablename__ = "opponent_profiles"
+
+    user_id = Column(String, primary_key=True)
+    games_played = Column(Integer, default=0, nullable=False)
+    style_vector = Column(JSON, default=dict, nullable=False)  # {tactical: 0.5, risk: 0.5, ...}
+    motif_risks = Column(JSON, default=dict, nullable=False)   # {forks: 0.1, pins: 0.2, ...}
+    updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+

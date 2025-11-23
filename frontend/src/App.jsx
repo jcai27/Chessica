@@ -5,6 +5,7 @@ import ComputerPage from "./pages/ComputerPage";
 import MultiplayerPage from "./pages/MultiplayerPage";
 import ReplayPage from "./pages/ReplayPage";
 import AuthPage from "./pages/AuthPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/multiplayer" element={<MultiplayerPage />} />
           <Route path="/replay" element={<ReplayPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

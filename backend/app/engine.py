@@ -81,10 +81,32 @@ def _score_to_cp(score: chess.engine.PovScore | None) -> int:
 CHECKMATE_CP = 10000
 
 
-def pick_engine_move(board: Board, difficulty: str, engine_rating: int) -> tuple[str, int]:
+def pick_engine_move(board: Board, difficulty: str, engine_rating: int, user_id: str | None = None) -> tuple[str, int, float, dict]:
     if board.raw.is_game_over():
         raise ValueError("Game already over.")
 
+    # If no user_id or exploit mode not requested (implied by difficulty settings for now), use standard
+    # For this implementation, we'll assume if user_id is present, we try exploit search if difficulty is advanced+
+    
+    use_exploit = user_id is not None and difficulty in ("advanced", "expert", "grandmaster")
+    
+    if use_exploit and user_id:
+        from .search import ExploitSearch
+        from .opponent_model import ProfileService
+        from .database import SessionLocal
+        
+        db = SessionLocal()
+        try:
+            profile_service = ProfileService(db)
+            searcher = ExploitSearch(profile_service)
+            # Use a tighter time limit for search to keep response fast
+            move, score, confidence = searcher.search(board.raw, user_id, time_limit=1.0)
+            profile = profile_service.get_profile(user_id)
+            return move, score, confidence, profile
+        finally:
+            db.close()
+
+    # Fallback to standard Stockfish
     profile = _difficulty_profile(difficulty, engine_rating)
     think_time = max(0.05, min(settings.engine_move_time_limit, float(profile["move_time"])))
     skill = int(profile.get("skill", 15))
@@ -107,7 +129,9 @@ def pick_engine_move(board: Board, difficulty: str, engine_rating: int) -> tuple
         if result.move is None:
             raise ValueError("Engine failed to return a move.")
         eval_cp = _score_to_cp(result.info.get("score"))
-        return result.move.uci(), eval_cp
+        
+        # Return dummy exploit data for standard move
+        return result.move.uci(), eval_cp, 0.0, {"style": {}, "motif_risks": {}}
 
 
 def make_game_state(board: Board) -> "GameState":
@@ -124,9 +148,9 @@ def make_game_state(board: Board) -> "GameState":
 def _material_phase(board: chess.Board) -> str:
     values = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
     total = sum(values.get(p.piece_type, 0) for p in board.piece_map().values())
-    if total <= 14:
+    if total <= 40:
         return "endgame"
-    if total <= 22:
+    if total <= 65:
         return "middlegame"
     return "opening"
 
@@ -352,21 +376,7 @@ def build_candidate_plans(board: chess.Board, difficulty: str, engine_rating: in
     return plans[:3]
 
 
-def mock_opponent_profile() -> "OpponentProfile":
-    from random import random
 
-    from .schemas import OpponentProfile
-
-    return OpponentProfile(
-        style={"tactical": round(random(), 2), "risk": round(random(), 2)},  # type: ignore[arg-type]
-        motif_risk={"forks": round(random(), 2), "back_rank": round(random(), 2)},
-    )
-
-
-def mock_exploit_confidence() -> float:
-    from random import random
-
-    return round(0.4 + random() * 0.5, 2)
 
 
 def explain_engine_move(

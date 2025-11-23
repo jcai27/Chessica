@@ -9,8 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api import analysis, analytics, sessions, stream, users, multiplayer, auth
 from .config import settings
-from .database import Base, engine
+from .database import Base, engine, init_db
 from .migrations import ensure_multiplayer_columns
+from .worker import start_worker
 
 if hasattr(asyncio, "WindowsProactorEventLoopPolicy"):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -41,5 +42,7 @@ def healthcheck() -> dict[str, str]:
 
 @app.on_event("startup")
 def _startup() -> None:
+    init_db()
     Base.metadata.create_all(bind=engine)
     ensure_multiplayer_columns(engine)
+    start_worker()
