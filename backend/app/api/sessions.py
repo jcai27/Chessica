@@ -338,9 +338,13 @@ async def make_move(
     record.last_eval_cp = post_engine_eval
 
     # Use the real profile returned by the engine (or fallback)
-    from ..schemas import OpponentProfile
+    from ..schemas import OpponentProfile, OpponentStyle
+    style_data = profile_data.get("style", {})
     profile = OpponentProfile(
-        style=profile_data.get("style", {}),
+        style=OpponentStyle(
+            tactical=style_data.get("tactical", 0.5),
+            risk=style_data.get("risk", 0.5)
+        ),
         motif_risk=profile_data.get("motif_risks", {})
     )
     record.opponent_profile = profile
