@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { API_BASE, DEFAULT_TIME_CONTROL, WS_BASE } from "../lib/config";
 import { DIFFICULTY_PRESETS, describePreset } from "../lib/difficulties";
 import { describeEval, formatEval, formatMs } from "../lib/format";
+import { useSettings, BOARD_THEMES } from "../lib/settings";
 
 const TIME_PRESETS = [
   { id: "blitz", label: "Blitz 5+0", time_control: { initial_ms: 300000, increment_ms: 0 } },
@@ -24,6 +25,7 @@ const parseCoachSummary = (summary) => {
 };
 
 function ComputerPage() {
+  const { settings } = useSettings();
   const chessRef = useRef(new Chess());
   const notationRef = useRef(new Chess());
   const streamRef = useRef(null);
@@ -368,16 +370,16 @@ function ComputerPage() {
                 position={fen}
                 onPieceDrop={handleDrop}
                 boardOrientation={orientation}
-                animationDuration={200}
+                animationDuration={settings.animationsEnabled ? settings.animationSpeed : 0}
                 customBoardStyle={{
                   borderRadius: 16,
                   boxShadow: "0 12px 26px rgba(0,0,0,0.35)"
                 }}
-                customDarkSquareStyle={{ backgroundColor: "#779952" }}
-                customLightSquareStyle={{ backgroundColor: "#edeed1" }}
+                customDarkSquareStyle={{ backgroundColor: BOARD_THEMES[settings.boardTheme].dark }}
+                customLightSquareStyle={{ backgroundColor: BOARD_THEMES[settings.boardTheme].light }}
                 customPremoveDarkSquareStyle={{ backgroundColor: "#e67e22" }}
                 customPremoveLightSquareStyle={{ backgroundColor: "#f39c12" }}
-                showBoardNotation={true}
+                showBoardNotation={settings.showCoordinates}
                 arePiecesDraggable={!pendingPromotion && !gameBanner}
               />
             </div>

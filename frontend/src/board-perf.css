@@ -1,10 +1,7 @@
 /* ========== CHESSBOARD PERFORMANCE OPTIMIZATIONS ========== */
 
-/* Force GPU acceleration for 60fps */
+/* Board container - minimal overrides to avoid interfering with drag positioning */
 .board-shell-react {
-    transform: translateZ(0) !important;
-    will-change: transform !important;
-    backface-visibility: hidden !important;
     border-radius: var(--panel-radius) !important;
     padding: 0.35rem !important;
     aspect-ratio: 1 / 1 !important;
@@ -14,19 +11,17 @@
     overflow: visible !important;
 }
 
-/* Smooth piece dragging with scale feedback */
+/* Smooth piece animations and dragging */
 .board-shell-react [data-piece] {
-    transition: none !important;
     cursor: grab !important;
-    pointer-events: auto !important;
+    /* Transitions enabled for smooth move animations */
 }
 
-.board-shell-react [data-piece]:active,
-.board-shell-react [data-piece][style*="cursor: grabbing"] {
+/* During drag - disable transitions to prevent lag */
+.board-shell-react [data-piece]:active {
     cursor: grabbing !important;
-    transform: scale(1.08) !important;
+    transition: none !important;
     z-index: 9999 !important;
-    pointer-events: auto !important;
 }
 
 /* Optimize square highlights */
@@ -39,6 +34,7 @@
     animation-timing-function: cubic-bezier(0.2, 0, 0, 1) !important;
 }
 
+/* Move list styles */
 .analysis-list {
     list-style: none;
     padding: 0;
@@ -47,4 +43,14 @@
     gap: 0.5rem;
     min-height: 0;
     overflow: auto;
+}
+
+/* Active and hover states for move list items */
+.analysis-item.active {
+    background: rgba(125, 211, 252, 0.15) !important;
+    border-color: rgba(125, 211, 252, 0.4) !important;
+}
+
+.analysis-item:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
 }

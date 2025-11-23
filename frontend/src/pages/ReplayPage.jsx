@@ -3,8 +3,10 @@ import { useLocation } from "react-router-dom";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { api } from "../lib/api";
+import { useSettings, BOARD_THEMES } from "../lib/settings";
 
 function ReplayPage() {
+  const { settings } = useSettings();
   const location = useLocation();
   const chessRef = useRef(new Chess());
   const [sessionId, setSessionId] = useState("");
@@ -78,110 +80,137 @@ function ReplayPage() {
 
   return (
     <div className="app">
-      <header className="hero">
-        <div className="hero-title">
-          <div className="badge">
-            <span>▶</span>
-          </div>
-          <div>
-            <h1>Replay</h1>
-            <p>Step through any finished session, share a link, or export PGN.</p>
-          </div>
-        </div>
-        <span className="pill">Review</span>
-      </header>
-
-      <section className="card controls">
-        <form
-          className="controls-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (sessionId) loadReplay(sessionId);
-          }}
-        >
-          <label className="select-field">
-            <span>Session ID</span>
-            <input
-              type="text"
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
-              placeholder="sess_xxx"
-              required
-            />
-          </label>
-          <button type="submit">Load Replay</button>
-          <button type="button" className="secondary" onClick={copyLink} disabled={!sessionId}>
-            Copy link
-          </button>
-          <button type="button" className="secondary" onClick={downloadPgn} disabled={!sessionId}>
-            Download PGN
-          </button>
-        </form>
-        <div className="difficulty-indicator">{message || "Paste a session id to begin."}</div>
-      </section>
-
-      <main className="replay-layout">
+      <div className="page-grid">
         <section className="card board-card">
-          <div className="card-header">
-            <div>
-              <h2>Replay Board</h2>
-              <span className="muted">{replay ? replay.result || replay.status : "No game loaded."}</span>
-            </div>
-            <span className="status-chip">{replay ? replay.session_id : "Idle"}</span>
-          </div>
           <div className="board-wrap">
+            <div className="clock-bar top-clock">
+              <div className="player-meta">
+                <span className="muted">{replay ? `Session ${replay.session_id}` : "No session"}</span>
+                <span className="muted">{replay?.result || replay?.status || "Idle"}</span>
+              </div>
+              <span className="pill">Move {current}/{replay?.moves?.length || 0}</span>
+            </div>
             <div className="board-shell-react">
               <Chessboard
                 id="replay-board"
                 position={fen}
                 boardOrientation={replay?.player_color || "white"}
                 arePiecesDraggable={false}
-                customBoardStyle={{ borderRadius: 16, boxShadow: "0 12px 26px rgba(0,0,0,0.35)" }}
+                animationDuration={settings.animationsEnabled ? settings.animationSpeed : 0}
+                customBoardStyle={{
+                  borderRadius: 16,
+                  boxShadow: "0 12px 26px rgba(0,0,0,0.35)"
+                }}
+                customDarkSquareStyle={{ backgroundColor: BOARD_THEMES[settings.boardTheme].dark }}
+                customLightSquareStyle={{ backgroundColor: BOARD_THEMES[settings.boardTheme].light }}
+                showBoardNotation={settings.showCoordinates}
               />
             </div>
-            <div className="replay-controls">
-              <button type="button" onClick={() => stepTo(0)}>
-                Start
-              </button>
-              <button type="button" onClick={() => stepTo(current - 1)}>
-                Prev
-              </button>
-              <button type="button" onClick={() => stepTo(current + 1)}>
-                Next
-              </button>
-              <button type="button" onClick={() => stepTo(replay?.moves?.length || 0)}>
-                End
-              </button>
+            <div className="clock-bar bottom-clock">
+              <div className="inline-actions compact">
+                <button type="button" onClick={() => stepTo(0)}>
+                  ⏮ Start
+                </button>
+                <button type="button" onClick={() => stepTo(current - 1)}>
+                  ◀ Prev
+                </button>
+                <button type="button" onClick={() => stepTo(current + 1)}>
+                  Next ▶
+                </button>
+                <button type="button" onClick={() => stepTo(replay?.moves?.length || 0)}>
+                  End ⏭
+                </button>
+              </div>
+              <div className="player-meta">
+                <span className="muted">Replay Controls</span>
+              </div>
             </div>
-            <div className="replay-meta">
-              <span>
-                Move {current}/{replay?.moves?.length || 0}
-              </span>
+            <div className="inline-actions compact align-right">
+              <button type="button" className="secondary" disabled={!sessionId} onClick={downloadPgn}>
+                Download PGN
+              </button>
+              <button type="button" className="secondary" onClick={copyLink} disabled={!sessionId}>
+                Copy Link
+              </button>
+              <span className="muted tiny">{message || "Use controls to navigate"}</span>
             </div>
           </div>
         </section>
 
-        <section className="card insight-card">
-          <div className="card-header">
-            <div>
-              <h2>Move List</h2>
-              <span className="muted">Tap a move to jump</span>
+        <div className="side-stack">
+          <header className="card hero hero-card">
+            <div className="hero-title">
+              <div className="badge">
+                <span>▶</span>
+              </div>
+              <div>
+                <h1>Game Replay</h1>
+                <p>Step through any finished session, share a link, or export PGN.</p>
+                <small className="muted">
+                  {replay ? `Reviewing: ${replay.session_id}` : "No session loaded"}
+                </small>
+              </div>
             </div>
-          </div>
-          <div className="replay-move-list">
-            {replay?.moves?.map((entry, idx) => (
-              <button
-                key={`${entry.ply}-${entry.uci}`}
-                type="button"
-                className={idx === current ? "active" : ""}
-                onClick={() => stepTo(idx + 1)}
-              >
-                {entry.ply}. {entry.san || entry.uci}
+            <span className="pill">{replay ? "Loaded" : "Idle"}</span>
+          </header>
+
+          <section className="card tab-card">
+            <div className="tab-bar">
+              <button type="button" className="tab-button active">
+                Move List
               </button>
-            ))}
-          </div>
-        </section>
-      </main>
+              <button type="button" className="tab-button">
+                Load Session
+              </button>
+            </div>
+
+            <div className="tab-panel">
+              <div className="stack">
+                <form
+                  className="controls-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (sessionId) loadReplay(sessionId);
+                  }}
+                >
+                  <label className="select-field">
+                    <span>Session ID</span>
+                    <input
+                      type="text"
+                      value={sessionId}
+                      onChange={(e) => setSessionId(e.target.value)}
+                      placeholder="sess_xxx or paste replay URL"
+                      required
+                    />
+                  </label>
+                  <button type="submit">Load Replay</button>
+                </form>
+
+                <ul className="analysis-list">
+                  {!replay?.moves?.length && <li className="muted">No moves yet. Load a session to begin.</li>}
+                  {replay?.moves?.map((entry, idx) => (
+                    <li
+                      key={`${entry.ply}-${entry.uci}`}
+                      className={`analysis-item ${idx === current - 1 ? "active" : ""}`}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => stepTo(idx + 1)}
+                    >
+                      <strong>
+                        {entry.ply}. {entry.san || entry.uci}
+                      </strong>
+                      {entry.eval_cp !== undefined && (
+                        <div className="muted">
+                          Eval: {entry.eval_cp > 0 ? "+" : ""}{(entry.eval_cp / 100).toFixed(2)}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

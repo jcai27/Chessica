@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./styles.css";
 import "./board-perf.css";
+import "./auth.css";
 
 const root = document.getElementById("root");
 
