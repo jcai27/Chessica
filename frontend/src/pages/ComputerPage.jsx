@@ -378,7 +378,6 @@ function ComputerPage() {
                 customPremoveDarkSquareStyle={{ backgroundColor: "#e67e22" }}
                 customPremoveLightSquareStyle={{ backgroundColor: "#f39c12" }}
                 showBoardNotation={true}
-                boardWidth={500}
                 arePiecesDraggable={!pendingPromotion && !gameBanner}
               />
             </div>

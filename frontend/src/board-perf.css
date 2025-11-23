@@ -8,22 +8,25 @@
     border-radius: var(--panel-radius) !important;
     padding: 0.35rem !important;
     aspect-ratio: 1 / 1 !important;
-    max-height: min(60vh, 60vw) !important;
-    max-width: min(85vw, 560px) !important;
+    max-width: min(90vw, 600px) !important;
     width: 100% !important;
     margin: 0 auto !important;
+    overflow: visible !important;
 }
 
 /* Smooth piece dragging with scale feedback */
 .board-shell-react [data-piece] {
-    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
+    transition: none !important;
     cursor: grab !important;
+    pointer-events: auto !important;
 }
 
-.board-shell-react [data-piece]:active {
+.board-shell-react [data-piece]:active,
+.board-shell-react [data-piece][style*="cursor: grabbing"] {
     cursor: grabbing !important;
     transform: scale(1.08) !important;
-    z-index: 999 !important;
+    z-index: 9999 !important;
+    pointer-events: auto !important;
 }
 
 /* Optimize square highlights */
